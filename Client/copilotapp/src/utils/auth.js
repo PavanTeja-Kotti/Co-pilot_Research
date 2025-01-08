@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }) => {
         const response = await api.accounts().login(email, password);
         if (response.success) {
             setUser(response.data);
-            navigate('/dashboard');
+            navigate('/');
             return response.data;
         }
         throw new Error(response.message || 'Login failed');
@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }) => {
         const response = await api.accounts().register(email, username, password, password_confirm, first_name, last_name);
         if (response.success) {
             setUser(response.data);
-            navigate('/dashboard');
+            navigate('/');
             return response.data;
         }
         throw new Error(response.message || 'Registration failed');
