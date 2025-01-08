@@ -1,5 +1,7 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useNotification } from './NotificationContext';
 import api from './api';
 
 const AuthContext = createContext(null);
@@ -8,16 +10,22 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+    const { showError } = useNotification();
 
     useEffect(() => {
+        // Set up API error handling
+        api.setNotificationCallback((message, error) => {
+            showError(error || message);
+        });
+
         const checkAuth = async () => {
             try {
                 if (localStorage.getItem('accessToken')) {
-                    const profile = await api.accounts().getProfile();
-                    setUser(profile);
+                    const response = await api.accounts().getProfile();
+                    if (response.success) {
+                        setUser(response.data);
+                    }
                 }
-            } catch (error) {
-                console.error('Auth check failed:', error);
             } finally {
                 setLoading(false);
             }
@@ -27,31 +35,30 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (email, password) => {
-        try {
-            const user = await api.accounts().login(email, password);
-            setUser(user);
+        const response = await api.accounts().login(email, password);
+        if (response.success) {
+            setUser(response.data);
             navigate('/dashboard');
-            return user;
-        } catch (error) {
-            throw new Error('Login failed');
+            return response.data;
         }
+        throw new Error(response.message || 'Login failed');
     };
 
-    const register = async (email, username, password,password_confirm,first_name,last_name) => {
-        try {
-            const user = await api.accounts().register(email, username, password,password_confirm,first_name,last_name);
-            setUser(user);
+    const register = async (email, username, password, password_confirm, first_name, last_name) => {
+        const response = await api.accounts().register(email, username, password, password_confirm, first_name, last_name);
+        if (response.success) {
+            setUser(response.data);
             navigate('/dashboard');
-            return user;
-        } catch (error) {
-            throw new Error('Registration failed');
+            return response.data;
         }
+        throw new Error(response.message || 'Registration failed');
     };
 
-    const logout = () => {
-        api.accounts().logout();
+    const logout = async () => {
+        const response = await api.accounts().logout();
         setUser(null);
         navigate('/login');
+        return response;
     };
 
     if (loading) return <div>Loading...</div>;
