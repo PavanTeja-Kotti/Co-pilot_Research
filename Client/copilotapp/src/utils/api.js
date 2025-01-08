@@ -10,7 +10,7 @@ class BaseService {
         return this.accessToken ? { 'Authorization': `${this.tokenType} ${this.accessToken}` } : {};
     }
 
-    async request(endpoint, options = {}) {
+    async request(endpoint, options = {}, parseJSON = true) {
         const headers = {
             'Content-Type': 'application/json',
             ...this.getAuthHeader(),
@@ -23,7 +23,20 @@ class BaseService {
                 headers
             });
 
-            const responseData = await response.json();
+            // For requests that don't need JSON parsing (like logout)
+            if (!parseJSON) {
+                return response.ok;
+            }
+
+            let responseData;
+            try {
+                responseData = await response.json();
+            } catch (e) {
+                if (!response.ok) {
+                    throw new Error('Request failed');
+                }
+                return null;
+            }
 
             // Handle different response statuses
             if (response.status === 401) {
@@ -44,12 +57,11 @@ class BaseService {
             }
 
             if (!response.ok) {
-                throw new Error(responseData.message || 'Request failed');
+                throw new Error(responseData?.message || 'Request failed');
             }
 
             return responseData;
         } catch (error) {
-            // Network errors or other issues
             if (error.message === 'Failed to fetch') {
                 throw new Error('Network error');
             }
@@ -74,7 +86,6 @@ class BaseService {
             }
 
             const data = await response.json();
-            // Handle nested tokens object if present
             const accessToken = data.tokens?.access || data.access;
             const refreshToken = data.tokens?.refresh || data.refresh;
             
@@ -123,7 +134,6 @@ class AccountsService {
                 body: JSON.stringify({ email, password })
             });
             
-            // Handle the nested tokens structure
             if (response.tokens?.access && response.tokens?.refresh) {
                 this.baseService.setTokens(
                     response.tokens.access,
@@ -155,7 +165,6 @@ class AccountsService {
                 })
             });
             
-            // Handle the nested tokens structure
             if (response.tokens?.access && response.tokens?.refresh) {
                 this.baseService.setTokens(
                     response.tokens.access,
@@ -181,10 +190,14 @@ class AccountsService {
 
     async logout() {
         try {
+            // Don't parse JSON for logout request
             await this.baseService.request(`${this.endpoint}/logout/`, {
                 method: 'POST'
-            });
+            }, false);
+        } catch (error) {
+            console.error('Logout request failed:', error);
         } finally {
+            // Always clear tokens regardless of server response
             this.baseService.clearTokens();
         }
     }
