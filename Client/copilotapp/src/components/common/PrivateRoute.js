@@ -1,3 +1,7 @@
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../utils/auth';
+
+
 const PrivateRoute = ({ children }) => {
     const { isAuthenticated, loading, sessionError } = useAuth();
     const location = useLocation();
@@ -23,5 +27,7 @@ const PrivateRoute = ({ children }) => {
 
     return children;
 };
+
+export default PrivateRoute;
 
 

@@ -1,4 +1,5 @@
 import  SessionErrorBanner  from './components/common/SessionErrorBanner';
+import PrivateRoute from './components/common/PrivateRoute';
 import { useAuth } from './utils/auth';
 import { AuthProvider } from './utils/auth';
 import { useEffect, useState } from 'react';
@@ -28,11 +29,13 @@ function App() {
            
                 <Routes>
                     <Route path="/login" element={<Login />} />
+                    <Route path="/" element={ <PrivateRoute>
+                        <h1>Login</h1>
+                        </PrivateRoute>} />
+                    
                     {/* <Route path="/register" element={<Register />} /> */}
                     {/* <Route path="/" element={
-                        <PrivateRoute>
-                            <Dashboard />
-                        </PrivateRoute>
+                       
                     } /> */}
                     {/* Other routes */}
                 </Routes>

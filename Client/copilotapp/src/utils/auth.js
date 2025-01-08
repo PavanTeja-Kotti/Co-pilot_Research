@@ -43,10 +43,11 @@ export const AuthProvider = ({ children }) => {
 
     const checkAuth = async (silent = false) => {
         try {
-            const userData = await api.getUserInfo();
+            const userData = await api.getUserProfile();
             setUser(userData);
             setIsAuthenticated(true);
             setSessionError(null);
+            return userData;
         } catch (error) {
             handleAuthError(error, silent);
         } finally {
