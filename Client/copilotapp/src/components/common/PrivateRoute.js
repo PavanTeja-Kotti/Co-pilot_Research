@@ -1,4 +1,3 @@
-
 // components/common/PrivateRoute.jsx
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
@@ -10,7 +9,6 @@ const PrivateRoute = ({ children }) => {
     if (!user) {
         return <Navigate to="/login" state={{ returnTo: location.pathname }} replace />;
     }
-
     return children;
 };
 

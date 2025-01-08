@@ -1,9 +1,8 @@
-
 import PrivateRoute from "./components/common/PrivateRoute";
 import { useAuth } from "./utils/auth";
 import { AuthProvider } from "./utils/auth";
 import { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route,  } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, } from "react-router-dom";
 import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
 
@@ -23,40 +22,40 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   return (
-   
-      <Routes>
-        {/* Public routes */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PublicRoute>
-              <Register />
-            </PublicRoute>
-          }
-        />
 
-        {/* Protected routes */}
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Homepage />
-            </PrivateRoute>
-          }
-        />
+    <Routes>
+      {/* Public routes */}
+      <Route
+        path="/login"
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <PublicRoute>
+            <Register />
+          </PublicRoute>
+        }
+      />
 
-        {/* Catch all route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
- 
+      {/* Protected routes */}
+      <Route
+        path="/"
+        element={
+          <PrivateRoute>
+            <Homepage />
+          </PrivateRoute>
+        }
+      />
+
+      {/* Catch all route */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+
   );
 }
 
