@@ -4,6 +4,7 @@ class BaseService {
         this.accessToken = localStorage.getItem('accessToken');
         this.refreshToken = localStorage.getItem('refreshToken');
         this.tokenType = 'Bearer';
+        this.notificationCallback = null;
     }
 
     getAuthHeader() {
@@ -20,67 +21,88 @@ class BaseService {
         };
     }
 
+    setNotificationCallback(callback) {
+        this.notificationCallback = callback;
+    }
+
     async request(endpoint, options = {}, parseJSON = true) {
         const headers = {
             'Content-Type': 'application/json',
             ...this.getAuthHeader(),
             ...options.headers
         };
-
+    
         try {
             const response = await fetch(`${this.baseURL}${endpoint}`, {
                 ...options,
                 headers
             });
-
+    
             // For requests that don't need JSON parsing (like logout)
             if (!parseJSON) {
-                return this.formatResponse(response.ok, null, 
+                const formattedResponse = this.formatResponse(response.ok, null, 
                     response.ok ? 'Operation successful' : 'Operation failed');
+                
+                if (!formattedResponse.success && this.notificationCallback) {
+                    this.notificationCallback(formattedResponse.message, formattedResponse.error);
+                }
+                
+                return formattedResponse;
             }
-
+    
             let responseData;
             try {
                 responseData = await response.json();
             } catch (e) {
-                if (!response.ok) {
-                    return this.formatResponse(false, null, 'Request failed', 'Invalid response format');
+                const formattedResponse = response.ok 
+                    ? this.formatResponse(true, null, 'Operation successful')
+                    : this.formatResponse(false, null, 'Request failed', 'Invalid response format');
+                
+                if (!formattedResponse.success && this.notificationCallback) {
+                    this.notificationCallback(formattedResponse.message, formattedResponse.error);
                 }
-                return this.formatResponse(true, null, 'Operation successful');
+                
+                return formattedResponse;
             }
-
-            // Handle different response statuses
-            if (response.status === 401) {
-                if (this.refreshToken) {
+    
+            // First check if there's an error message in the response
+            if (!response.ok) {
+                const errorMessage = responseData?.error || responseData?.message || 'Request failed';
+                const formattedResponse = this.formatResponse(false, null, errorMessage, errorMessage);
+                
+                // If it's a 401 and we don't have a direct error message, try token refresh
+                if (response.status === 401 && !responseData?.error && this.refreshToken) {
                     try {
                         await this.refreshAccessToken();
                         // Retry the original request with new token
                         return this.request(endpoint, options);
                     } catch (refreshError) {
                         this.clearTokens();
-                        return this.formatResponse(false, null, 'Authentication failed', 
-                            refreshError.message);
                     }
-                } else {
-                    this.clearTokens();
-                    return this.formatResponse(false, null, 'Authentication required', 
-                        'No refresh token available');
                 }
+                
+                if (this.notificationCallback) {
+                    this.notificationCallback(errorMessage, errorMessage);
+                }
+                
+                return formattedResponse;
             }
-
-            if (!response.ok) {
-                return this.formatResponse(false, null, 
-                    responseData?.message || 'Request failed',
-                    responseData?.error || 'Unknown error');
-            }
-
-            return this.formatResponse(true, responseData, 
+    
+            const formattedResponse = this.formatResponse(true, responseData, 
                 responseData?.message || 'Operation successful');
-
+            
+            return formattedResponse;
+    
         } catch (error) {
-            return this.formatResponse(false, null,
-                error.message || 'Request failed',
+            const formattedResponse = this.formatResponse(false, null,
+                'Request failed',
                 error.message === 'Failed to fetch' ? 'Network error' : error.message);
+            
+            if (this.notificationCallback) {
+                this.notificationCallback(formattedResponse.message, formattedResponse.error);
+            }
+            
+            return formattedResponse;
         }
     }
 
@@ -238,6 +260,7 @@ class AccountsService {
         }
     }
 }
+
 
 const api = new BaseService();
 export default api;

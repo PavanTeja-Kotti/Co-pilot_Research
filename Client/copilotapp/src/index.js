@@ -4,12 +4,13 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './utils/auth';
+import { NotificationProvider } from './utils/NotificationContext';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-   <Router>  <AuthProvider> <App /> </AuthProvider></Router>
+   <Router><NotificationProvider>  <AuthProvider> <App /> </AuthProvider></NotificationProvider></Router>
    
   </React.StrictMode>
 );
