@@ -238,13 +238,63 @@ class AccountsService {
     async getProfile() {
         return this.baseService.request(`${this.endpoint}/profile/`);
     }
-
+    
+    async updateProfile(userData) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/profile/`,
+                {
+                    method: 'PATCH',
+                    body: JSON.stringify(userData)
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Update profile request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Profile update failed',
+                error.message
+            );
+        }
+    }
+    
+    async deleteProfile() {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/profile/`,
+                {
+                    method: 'DELETE'
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Delete profile request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Profile deletion failed',
+                error.message
+            );
+        } finally {
+            // Since this is account deletion, we should clear tokens like logout
+            this.baseService.clearTokens();
+        }
+    }
+    
     async logout() {
         try {
-            const response = await this.baseService.request(`${this.endpoint}/logout/`, {
-                method: 'POST',
-                body: JSON.stringify({ refresh_token: this.baseService.refreshToken })
-            }, false);
+            const response = await this.baseService.request(
+                `${this.endpoint}/logout/`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ refresh_token: this.baseService.refreshToken })
+                },
+                false
+            );
             
             return response;
         } catch (error) {
@@ -257,6 +307,32 @@ class AccountsService {
             );
         } finally {
             this.baseService.clearTokens();
+        }
+    }
+
+
+    async changePassword(oldPassword, newPassword) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/change-password/`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        old_password: oldPassword,
+                        new_password: newPassword
+                    })
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Password change request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Password change failed',
+                error.message
+            );
         }
     }
 }

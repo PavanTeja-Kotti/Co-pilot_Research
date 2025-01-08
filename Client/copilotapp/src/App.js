@@ -1,62 +1,54 @@
-import PrivateRoute from "./components/common/PrivateRoute";
-import { useAuth } from "./utils/auth";
-import { AuthProvider } from "./utils/auth";
-import { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, } from "react-router-dom";
-import Login from "./components/auth/Login";
-import Register from "./components/auth/Register";
-
-import { Navigate } from "react-router-dom";
-import Homepage from "./Homepage";
+import { ConfigProvider, theme } from 'antd';
+import { useEffect, useState } from 'react';
+import {  Routes, Route, Navigate } from 'react-router-dom';
+import { Login, Register } from './components/auth/auth';
+import AppLayout from './components/Layout/AppLayout';
+import HomePage from './pages/Homepage';
+import Profile from './pages/Profile';
+import { useAuth } from './utils/auth';
+import PrivateRoute from './components/common/PrivateRoute';
 
 const PublicRoute = ({ children }) => {
   const { user } = useAuth();
-
-  // If user is authenticated, redirect to home
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
+  return user ? <Navigate to="/" replace /> : children;
 };
 
-function App() {
-  return (
-
-    <Routes>
-      {/* Public routes */}
-      <Route
-        path="/login"
-        element={
-          <PublicRoute>
-            <Login />
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <PublicRoute>
-            <Register />
-          </PublicRoute>
-        }
-      />
-
-      {/* Protected routes */}
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            <Homepage />
-          </PrivateRoute>
-        }
-      />
-
-      {/* Catch all route */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-
+const App = () => {
+  const [isDarkMode, setIsDarkMode] = useState(
+    window.matchMedia('(prefers-color-scheme: dark)').matches
   );
-}
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => setIsDarkMode(e.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const themeConfig = {
+    algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    token: {
+      colorPrimary: '#1677ff',
+      borderRadius: 8,
+    },
+  };
+
+  return (
+   
+      <ConfigProvider theme={themeConfig}>
+          <Routes>
+            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+            <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
+              <Route index path="/" element={<HomePage />} />
+              <Route path="/dashboard" element={<h1>sdsdeeee</h1>} />
+              <Route path="/profile" element={<Profile />} />
+            </Route>
+          </Routes>
+       
+      </ConfigProvider>
+   
+  );
+};
 
 export default App;

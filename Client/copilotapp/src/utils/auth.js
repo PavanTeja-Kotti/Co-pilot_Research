@@ -54,6 +54,60 @@ export const AuthProvider = ({ children }) => {
         throw new Error(response.message || 'Registration failed');
     };
 
+    const updateProfile = async (userData) => {
+        try {
+            const response = await api.accounts().updateProfile(userData);      
+            if (response.data) {
+                setUser(response.data);
+                // showSuccess('Profile updated successfully');
+                return response.data;
+            }
+            throw new Error('Failed to update profile');
+        } catch (error) {
+            showError(error.message);
+            throw error;
+        }
+    };
+
+    const deleteProfile = async () => {
+        try {
+            const response = await api.accounts().deleteProfile();
+            if (response.data) {
+                setUser(null);
+                // showSuccess('Account deactivated successfully');
+                navigate('/login');
+                return response.data;
+            }
+            throw new Error('Failed to deactivate account');
+        } catch (error) {
+            showError(error.message);
+            throw error;
+        }
+    };
+
+    const changePassword  = async (oldPassword, newPassword) =>  {
+        try {
+            const response = await api.accounts().changePassword(oldPassword, newPassword);
+            if (response.data) {
+                // setUser(null);
+                // showSuccess('Account deactivated successfully');
+                // navigate('/login');
+                return response.data;
+            }
+            throw new Error('Failed to changePassword ');
+        } catch (error) {
+            showError(error.message);
+            throw error;
+        }
+
+
+    }
+
+
+
+
+    
+
     const logout = async () => {
         const response = await api.accounts().logout();
         setUser(null);
@@ -64,7 +118,8 @@ export const AuthProvider = ({ children }) => {
     if (loading) return <div>Loading...</div>;
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, register }}>
+        <AuthContext.Provider value={{ user, login, logout, register,updateProfile,
+            deleteProfile ,changePassword }}>
             {children}
         </AuthContext.Provider>
     );
