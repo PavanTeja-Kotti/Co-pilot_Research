@@ -37,9 +37,9 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const register = async (email, username, password,password_confirm) => {
+    const register = async (email, username, password,password_confirm,first_name,last_name) => {
         try {
-            const user = await api.accounts().register(email, username, password,password_confirm);
+            const user = await api.accounts().register(email, username, password,password_confirm,first_name,last_name);
             setUser(user);
             navigate('/dashboard');
             return user;

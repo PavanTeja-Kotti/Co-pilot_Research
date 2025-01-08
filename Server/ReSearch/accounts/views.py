@@ -43,6 +43,7 @@ class LoginView(views.APIView):
                 password=serializer.validated_data['password']
             )
             if user:
+                print(UserSerializer(user).data)
                 refresh = RefreshToken.for_user(user)
                 return Response({
                     'message': 'Login successful',

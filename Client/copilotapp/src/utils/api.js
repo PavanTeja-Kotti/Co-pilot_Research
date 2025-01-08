@@ -153,7 +153,7 @@ class AccountsService {
         }
     }
 
-    async register(email, username, password, password_confirm) {
+    async register(email, username, password, password_confirm, first_name, last_name) {
         try {
             const response = await this.baseService.request(`${this.endpoint}/register/`, {
                 method: 'POST',
@@ -161,7 +161,9 @@ class AccountsService {
                     email, 
                     username, 
                     password,
-                    password_confirm 
+                    password_confirm ,
+                    first_name,
+                    last_name
                 })
             });
             
