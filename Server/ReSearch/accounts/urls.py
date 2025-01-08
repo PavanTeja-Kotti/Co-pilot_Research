@@ -16,7 +16,6 @@ urlpatterns = [
     path('change-password/',views. ChangePasswordView.as_view(), name='change-password'),
     path('check-auth/', views.check_auth_status, name='check-auth'),
 
-
     # Admin management endpoints
     path('users/', views.UserManagementView.as_view(), name='user-management'),
     path('users/<int:user_id>/', views.UserDetailView.as_view(), name='user-detail'),
