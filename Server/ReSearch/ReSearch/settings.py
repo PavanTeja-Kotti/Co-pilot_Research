@@ -49,10 +49,13 @@ SIMPLE_JWT = {
 }
 
 # Add CORS settings
+CORS_ALLOW_ALL_ORIGINS = True
+
+# OR specify allowed origins (recommended for production)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Your frontend URL
+    "http://127.0.0.1:3000",
 ]
-CORS_ALLOW_CREDENTIALS = True
 
 INSTALLED_APPS = [
     'django.contrib.admin',
