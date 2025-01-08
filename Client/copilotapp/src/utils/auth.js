@@ -13,8 +13,10 @@ export const AuthProvider = ({ children }) => {
         const checkAuth = async () => {
             try {
                 if (localStorage.getItem('accessToken')) {
-                    const profile = await api.accounts().getProfile();
-                    setUser(profile);
+                    const response = await api.accounts().getProfile();
+                    if (response.success) {
+                        setUser(response.data);
+                    }
                 }
             } catch (error) {
                 console.error('Auth check failed:', error);
@@ -27,31 +29,30 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (email, password) => {
-        try {
-            const user = await api.accounts().login(email, password);
-            setUser(user);
-            navigate('/dashboard');
-            return user;
-        } catch (error) {
-            throw new Error('Login failed');
+        const response = await api.accounts().login(email, password);
+        if (response.success) {
+            setUser(response.data);
+            navigate('/');
+            return response.data;
         }
+        throw new Error(response.message || 'Login failed');
     };
 
-    const register = async (email, username, password,password_confirm,first_name,last_name) => {
-        try {
-            const user = await api.accounts().register(email, username, password,password_confirm,first_name,last_name);
-            setUser(user);
-            navigate('/dashboard');
-            return user;
-        } catch (error) {
-            throw new Error('Registration failed');
+    const register = async (email, username, password, password_confirm, first_name, last_name) => {
+        const response = await api.accounts().register(email, username, password, password_confirm, first_name, last_name);
+        if (response.success) {
+            setUser(response.data);
+            navigate('/');
+            return response.data;
         }
+        throw new Error(response.message || 'Registration failed');
     };
 
-    const logout = () => {
-        api.accounts().logout();
+    const logout = async () => {
+        const response = await api.accounts().logout();
         setUser(null);
         navigate('/login');
+        return response;
     };
 
     if (loading) return <div>Loading...</div>;

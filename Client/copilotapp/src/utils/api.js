@@ -10,6 +10,16 @@ class BaseService {
         return this.accessToken ? { 'Authorization': `${this.tokenType} ${this.accessToken}` } : {};
     }
 
+    formatResponse(success, data = null, message = '', error = null) {
+        return {
+            success,
+            data,
+            message,
+            error,
+            timestamp: new Date().toISOString()
+        };
+    }
+
     async request(endpoint, options = {}, parseJSON = true) {
         const headers = {
             'Content-Type': 'application/json',
@@ -25,7 +35,8 @@ class BaseService {
 
             // For requests that don't need JSON parsing (like logout)
             if (!parseJSON) {
-                return response.ok;
+                return this.formatResponse(response.ok, null, 
+                    response.ok ? 'Operation successful' : 'Operation failed');
             }
 
             let responseData;
@@ -33,14 +44,13 @@ class BaseService {
                 responseData = await response.json();
             } catch (e) {
                 if (!response.ok) {
-                    throw new Error('Request failed');
+                    return this.formatResponse(false, null, 'Request failed', 'Invalid response format');
                 }
-                return null;
+                return this.formatResponse(true, null, 'Operation successful');
             }
 
             // Handle different response statuses
             if (response.status === 401) {
-                // Token expired or invalid
                 if (this.refreshToken) {
                     try {
                         await this.refreshAccessToken();
@@ -48,24 +58,29 @@ class BaseService {
                         return this.request(endpoint, options);
                     } catch (refreshError) {
                         this.clearTokens();
-                        throw new Error(refreshError.message || 'Authentication failed');
+                        return this.formatResponse(false, null, 'Authentication failed', 
+                            refreshError.message);
                     }
                 } else {
                     this.clearTokens();
-                    throw new Error('Authentication required');
+                    return this.formatResponse(false, null, 'Authentication required', 
+                        'No refresh token available');
                 }
             }
 
             if (!response.ok) {
-                throw new Error(responseData?.message || 'Request failed');
+                return this.formatResponse(false, null, 
+                    responseData?.message || 'Request failed',
+                    responseData?.error || 'Unknown error');
             }
 
-            return responseData;
+            return this.formatResponse(true, responseData, 
+                responseData?.message || 'Operation successful');
+
         } catch (error) {
-            if (error.message === 'Failed to fetch') {
-                throw new Error('Network error');
-            }
-            throw error;
+            return this.formatResponse(false, null,
+                error.message || 'Request failed',
+                error.message === 'Failed to fetch' ? 'Network error' : error.message);
         }
     }
 
@@ -90,7 +105,7 @@ class BaseService {
             const refreshToken = data.tokens?.refresh || data.refresh;
             
             this.setTokens(accessToken, refreshToken);
-            return data;
+            return this.formatResponse(true, data, 'Token refresh successful');
         } catch (error) {
             this.clearTokens();
             throw error;
@@ -134,22 +149,28 @@ class AccountsService {
                 body: JSON.stringify({ email, password })
             });
             
-            if (response.tokens?.access && response.tokens?.refresh) {
+            if (response.success && response.data?.tokens) {
                 this.baseService.setTokens(
-                    response.tokens.access,
-                    response.tokens.refresh
+                    response.data.tokens.access,
+                    response.data.tokens.refresh
                 );
-            } else {
-                throw new Error('Invalid token response');
+                
+                return this.baseService.formatResponse(
+                    true,
+                    response.data.user,
+                    'Login successful'
+                );
             }
             
-            return {
-                message: response.message,
-                user: response.user
-            };
+            return response;
         } catch (error) {
             this.baseService.clearTokens();
-            throw error;
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Login failed',
+                error.message
+            );
         }
     }
 
@@ -161,28 +182,34 @@ class AccountsService {
                     email, 
                     username, 
                     password,
-                    password_confirm ,
+                    password_confirm,
                     first_name,
                     last_name
                 })
             });
             
-            if (response.tokens?.access && response.tokens?.refresh) {
+            if (response.success && response.data?.tokens) {
                 this.baseService.setTokens(
-                    response.tokens.access,
-                    response.tokens.refresh
+                    response.data.tokens.access,
+                    response.data.tokens.refresh
                 );
-            } else {
-                throw new Error('Invalid token response');
+                
+                return this.baseService.formatResponse(
+                    true,
+                    response.data.user,
+                    'Registration successful'
+                );
             }
             
-            return {
-                message: response.message,
-                user: response.user
-            };
+            return response;
         } catch (error) {
             this.baseService.clearTokens();
-            throw error;
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Registration failed',
+                error.message
+            );
         }
     }
 
@@ -192,15 +219,21 @@ class AccountsService {
 
     async logout() {
         try {
-            // Don't parse JSON for logout request
-            await this.baseService.request(`${this.endpoint}/logout/`, {
+            const response = await this.baseService.request(`${this.endpoint}/logout/`, {
                 method: 'POST',
                 body: JSON.stringify({ refresh_token: this.baseService.refreshToken })
             }, false);
+            
+            return response;
         } catch (error) {
             console.error('Logout request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Logout failed',
+                error.message
+            );
         } finally {
-            // Always clear tokens regardless of server response
             this.baseService.clearTokens();
         }
     }
