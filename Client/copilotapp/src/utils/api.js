@@ -23,6 +23,8 @@ class BaseService {
                 headers
             });
 
+            const responseData = await response.json();
+
             // Handle different response statuses
             if (response.status === 401) {
                 // Token expired or invalid
@@ -33,7 +35,7 @@ class BaseService {
                         return this.request(endpoint, options);
                     } catch (refreshError) {
                         this.clearTokens();
-                        throw new Error('Authentication failed');
+                        throw new Error(refreshError.message || 'Authentication failed');
                     }
                 } else {
                     this.clearTokens();
@@ -42,11 +44,10 @@ class BaseService {
             }
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                throw new Error(errorData?.message || 'Request failed');
+                throw new Error(responseData.message || 'Request failed');
             }
 
-            return response.json();
+            return responseData;
         } catch (error) {
             // Network errors or other issues
             if (error.message === 'Failed to fetch') {
@@ -73,7 +74,11 @@ class BaseService {
             }
 
             const data = await response.json();
-            this.setTokens(data.access, data.refresh);
+            // Handle nested tokens object if present
+            const accessToken = data.tokens?.access || data.access;
+            const refreshToken = data.tokens?.refresh || data.refresh;
+            
+            this.setTokens(accessToken, refreshToken);
             return data;
         } catch (error) {
             this.clearTokens();
@@ -82,8 +87,10 @@ class BaseService {
     }
 
     setTokens(accessToken, refreshToken = null) {
-        this.accessToken = accessToken;
-        localStorage.setItem('accessToken', accessToken);
+        if (accessToken) {
+            this.accessToken = accessToken;
+            localStorage.setItem('accessToken', accessToken);
+        }
         
         if (refreshToken) {
             this.refreshToken = refreshToken;
@@ -111,19 +118,25 @@ class AccountsService {
 
     async login(email, password) {
         try {
-            const data = await this.baseService.request(`${this.endpoint}/login/`, {
+            const response = await this.baseService.request(`${this.endpoint}/login/`, {
                 method: 'POST',
                 body: JSON.stringify({ email, password })
             });
             
-            // Expect both access and refresh tokens from the backend
-            if (data.access && data.refresh) {
-                this.baseService.setTokens(data.access, data.refresh);
+            // Handle the nested tokens structure
+            if (response.tokens?.access && response.tokens?.refresh) {
+                this.baseService.setTokens(
+                    response.tokens.access,
+                    response.tokens.refresh
+                );
             } else {
                 throw new Error('Invalid token response');
             }
             
-            return data.user;
+            return {
+                message: response.message,
+                user: response.user
+            };
         } catch (error) {
             this.baseService.clearTokens();
             throw error;
@@ -132,7 +145,7 @@ class AccountsService {
 
     async register(email, username, password, password_confirm) {
         try {
-            const data = await this.baseService.request(`${this.endpoint}/register/`, {
+            const response = await this.baseService.request(`${this.endpoint}/register/`, {
                 method: 'POST',
                 body: JSON.stringify({ 
                     email, 
@@ -142,13 +155,20 @@ class AccountsService {
                 })
             });
             
-            if (data.access && data.refresh) {
-                this.baseService.setTokens(data.access, data.refresh);
+            // Handle the nested tokens structure
+            if (response.tokens?.access && response.tokens?.refresh) {
+                this.baseService.setTokens(
+                    response.tokens.access,
+                    response.tokens.refresh
+                );
             } else {
                 throw new Error('Invalid token response');
             }
             
-            return data.user;
+            return {
+                message: response.message,
+                user: response.user
+            };
         } catch (error) {
             this.baseService.clearTokens();
             throw error;
@@ -159,10 +179,9 @@ class AccountsService {
         return this.baseService.request(`${this.endpoint}/profile/`);
     }
 
-    logout() {
-        // Optionally send logout request to backend to invalidate token
+    async logout() {
         try {
-            this.baseService.request(`${this.endpoint}/logout/`, {
+            await this.baseService.request(`${this.endpoint}/logout/`, {
                 method: 'POST'
             });
         } finally {

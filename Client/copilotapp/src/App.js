@@ -1,50 +1,63 @@
-import  SessionErrorBanner  from './components/common/SessionErrorBanner';
-import PrivateRoute from './components/common/PrivateRoute';
-import { useAuth } from './utils/auth';
-import { AuthProvider } from './utils/auth';
-import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Login  from './components/auth/Login';
-import Register from './components/auth/Register';
+import SessionErrorBanner from "./components/common/SessionErrorBanner";
+import PrivateRoute from "./components/common/PrivateRoute";
+import { useAuth } from "./utils/auth";
+import { AuthProvider } from "./utils/auth";
+import { useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route,  } from "react-router-dom";
+import Login from "./components/auth/Login";
+import Register from "./components/auth/Register";
+import AuthWrapper from "./utils/AuthWrapper";
+import { Navigate } from "react-router-dom";
+import Homepage from "./Homepage";
 
+const PublicRoute = ({ children }) => {
+  const { user } = useAuth();
+
+  // If user is authenticated, redirect to home
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
 
 function App() {
-    const { sessionError } = useAuth();
-    const [showError, setShowError] = useState(true);
+  return (
+    <AuthWrapper>
+      <Routes>
+        {/* Public routes */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <Register />
+            </PublicRoute>
+          }
+        />
 
-    useEffect(() => {
-        if (sessionError) {
-            setShowError(true);
-        }
-    }, [sessionError]);
+        {/* Protected routes */}
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Homepage />
+            </PrivateRoute>
+          }
+        />
 
-    return (
-        <>
-        
-            {showError && sessionError && (
-                <SessionErrorBanner 
-                    error={sessionError}
-                    onDismiss={() => setShowError(false)}
-                />
-            )}
-           
-                <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/" element={ <PrivateRoute>
-                        <h1>Login</h1>
-                        </PrivateRoute>} />
-                    
-                    <Route path="/register" element={<Register />} />
-                    {/* <Route path="/" element={
-                       
-                    } /> */}
-                    {/* Other routes */}
-                </Routes>
-            
-        </>
-        
-    );
+        {/* Catch all route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AuthWrapper>
+  );
 }
-
 
 export default App;

@@ -3,20 +3,22 @@ import { useAuth } from '../../utils/auth';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 
 const Login = () => {
-    const { login } = useAuth();
+    const { login, user } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         email: '',
         password: ''
     });
-    const [error, setError] = useState(location.state?.error || '');
-
+    const [error, setError] = useState('');
+    
+    // Handle successful login redirect
     useEffect(() => {
-        if (location.state?.error) {
-            setError(location.state.error);
+        if (user) {
+            const returnTo = location.state?.returnTo || '/';
+            navigate(returnTo, { replace: true });
         }
-    }, [location]);
+    }, [user, navigate, location]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -24,8 +26,7 @@ const Login = () => {
         
         try {
             await login(formData.email, formData.password);
-            const returnTo = location.state?.returnTo || '/';
-            navigate(returnTo);
+            // Navigation is handled by the useEffect above
         } catch (err) {
             setError('Invalid email or password');
         }
