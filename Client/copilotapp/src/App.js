@@ -5,6 +5,7 @@ import { AuthProvider } from './utils/auth';
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login  from './components/auth/Login';
+import Register from './components/auth/Register';
 
 
 function App() {
@@ -33,7 +34,7 @@ function App() {
                         <h1>Login</h1>
                         </PrivateRoute>} />
                     
-                    {/* <Route path="/register" element={<Register />} /> */}
+                    <Route path="/register" element={<Register />} />
                     {/* <Route path="/" element={
                        
                     } /> */}

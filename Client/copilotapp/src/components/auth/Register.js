@@ -1,33 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../utils/auth';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
-const Login = () => {
-    const { login } = useAuth();
-    const location = useLocation();
+const Register = () => {
+    const { register } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         email: '',
-        password: ''
+        username: '',
+        password: '',
+        confirmPassword: ''
     });
-    const [error, setError] = useState(location.state?.error || '');
-
-    useEffect(() => {
-        if (location.state?.error) {
-            setError(location.state.error);
-        }
-    }, [location]);
+    const [error, setError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        
+
+        if (formData.password !== formData.confirmPassword) {
+            setError('Passwords do not match');
+            return;
+        }
         try {
-            await login(formData.email, formData.password);
-            const returnTo = location.state?.returnTo || '/';
-            navigate(returnTo);
+            await register(formData.email, formData.username, formData.password,formData.confirmPassword);
+            navigate('/');
         } catch (err) {
-            setError('Invalid email or password');
+            setError(err.message || 'Registration failed');
         }
     };
 
@@ -44,12 +42,12 @@ const Login = () => {
             <div className="max-w-md w-full space-y-8">
                 <div>
                     <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Sign in to your account
+                        Create your account
                     </h2>
                     <p className="mt-2 text-center text-sm text-gray-600">
                         Or{' '}
-                        <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-                            create a new account
+                        <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
+                            sign in to existing account
                         </Link>
                     </p>
                 </div>
@@ -78,6 +76,21 @@ const Login = () => {
                             />
                         </div>
                         <div>
+                            <label htmlFor="username" className="sr-only">
+                                Username
+                            </label>
+                            <input
+                                id="username"
+                                name="username"
+                                type="text"
+                                required
+                                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                                placeholder="Username"
+                                value={formData.username}
+                                onChange={handleChange}
+                            />
+                        </div>
+                        <div>
                             <label htmlFor="password" className="sr-only">
                                 Password
                             </label>
@@ -92,6 +105,21 @@ const Login = () => {
                                 onChange={handleChange}
                             />
                         </div>
+                        <div>
+                            <label htmlFor="confirmPassword" className="sr-only">
+                                Confirm Password
+                            </label>
+                            <input
+                                id="confirmPassword"
+                                name="confirmPassword"
+                                type="password"
+                                required
+                                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                                placeholder="Confirm Password"
+                                value={formData.confirmPassword}
+                                onChange={handleChange}
+                            />
+                        </div>
                     </div>
 
                     <div>
@@ -99,7 +127,7 @@ const Login = () => {
                             type="submit"
                             className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
-                            Sign in
+                            Create Account
                         </button>
                     </div>
                 </form>
@@ -108,4 +136,4 @@ const Login = () => {
     );
 };
 
-export default Login;
+export default Register;
