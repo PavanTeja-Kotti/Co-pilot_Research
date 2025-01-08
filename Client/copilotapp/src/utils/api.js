@@ -194,7 +194,8 @@ class AccountsService {
         try {
             // Don't parse JSON for logout request
             await this.baseService.request(`${this.endpoint}/logout/`, {
-                method: 'POST'
+                method: 'POST',
+                body: JSON.stringify({ refresh_token: this.baseService.refreshToken })
             }, false);
         } catch (error) {
             console.error('Logout request failed:', error);
