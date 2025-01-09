@@ -211,14 +211,14 @@ class AccountsService {
             });
             
             if (response.success && response.data?.tokens) {
-                this.baseService.setTokens(
-                    response.data.tokens.access,
-                    response.data.tokens.refresh
-                );
+                // this.baseService.setTokens(
+                //     response.data.tokens.access,
+                //     response.data.tokens.refresh
+                // );
                 
                 return this.baseService.formatResponse(
                     true,
-                    response.data.user,
+                    response.data?.user,
                     'Registration successful'
                 );
             }
