@@ -130,6 +130,7 @@ const Profile = () => {
                 <Upload 
                   showUploadList={false}
                   beforeUpload={() => false}
+                  
                 >
                   <Button 
                     type="primary" 
@@ -238,7 +239,7 @@ const Profile = () => {
                         rules={[
                           { required: true, message: 'Email is required' },
                           { type: 'email', message: 'Please enter a valid email' },
-                          { validator: validateEmail }
+                          // { validator: validateEmail }
                         ]}
                         validateTrigger="onBlur"
                       >
@@ -256,7 +257,7 @@ const Profile = () => {
                         rules={[
                           { required: true, message: 'Username is required' },
                           { min: 3, message: 'Username must be at least 3 characters' },
-                          { validator: validateUsername }
+                          // { validator: validateUsername }
                         ]}
                         validateTrigger="onBlur"
                       >
