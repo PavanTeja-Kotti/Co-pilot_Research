@@ -20,12 +20,15 @@ const { Content } = Layout;
 const { useToken } = theme;
 
 
-
+ // Import a fallback icon from Ant Design
 
 const DynamicIconRenderer = ({ iconName }) => {
   const IconComponent = Icons[iconName]; // Resolve icon from Icons
-  return IconComponent ? <IconComponent /> : null; // Render if found
+  
+  // If no valid icon is found, render a fallback icon (QuestionCircleOutlined in this case)
+  return IconComponent ? <IconComponent /> : <Icons.QuestionCircleOutlined />;
 };
+
 const ResearchInterestField = ({ field, isSelected, onToggle }) => {
   const { token } = useToken();
 
