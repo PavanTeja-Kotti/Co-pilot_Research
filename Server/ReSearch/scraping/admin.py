@@ -1,10 +1,9 @@
-# scraping/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.db.models import Count, Q
 from django import forms
-from .models import ResearchPaper, BookmarkedPaper
+from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike
 import json
 
 class ResearchPaperForm(forms.ModelForm):
@@ -165,8 +164,102 @@ class BookmarkedPaperAdmin(admin.ModelAdmin):
         return '-'
     notes_preview.short_description = 'Notes Preview'
 
-admin.site.register(BookmarkedPaper, BookmarkedPaperAdmin)
+class ResearchPaperCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'icon', 'created_by_email', 'active_likes_count', 'created_at']
+    list_filter = ['created_at', 'updated_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at', 'like_count', 'likes_preview']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'icon', 'description')
+        }),
+        ('Creator Information', {
+            'fields': ('created_by',)
+        }),
+        ('Statistics', {
+            'fields': ('like_count', 'likes_preview')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        })
+    )
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.annotate(
+            active_likes_count=Count(
+                'category_likes',
+                filter=Q(category_likes__is_active=True)
+            )
+        )
+
+    def created_by_email(self, obj):
+        if obj.created_by:
+            url = reverse('admin:accounts_user_change', args=[obj.created_by.id])
+            return format_html('<a href="{}">{}</a>', url, obj.created_by.email)
+        return 'Deleted User'
+    created_by_email.short_description = 'Created By'
+    created_by_email.admin_order_field = 'created_by__email'
+
+    def active_likes_count(self, obj):
+        url = reverse('admin:scraping_categorylike_changelist')
+        return format_html('<a href="{}?category__id={}&is_active=1">{}</a>', 
+                         url, obj.id, obj.active_likes_count)
+    active_likes_count.short_description = 'Active Likes'
+    active_likes_count.admin_order_field = 'active_likes_count'
+
+    def likes_preview(self, obj):
+        if not obj.pk:
+            return "Save the category first to see likes"
+            
+        likes = obj.category_likes.filter(is_active=True)[:5]
+        if not likes:
+            return "No active likes"
+        
+        html = ['<div style="margin-bottom: 10px;">Recent likes:</div><ul>']
+        for like in likes:
+            user_email = like.user.email if like.user else 'Deleted User'
+            html.append(f'<li>{user_email} - {like.created_at.strftime("%Y-%m-%d %H:%M")}</li>')
+        html.append('</ul>')
+        
+        total = obj.category_likes.filter(is_active=True).count()
+        if total > 5:
+            url = reverse('admin:scraping_categorylike_changelist')
+            html.append(format_html('<a href="{}?category__id={}&is_active=1">View all {} likes</a>', 
+                                  url, obj.id, total))
+        
+        return format_html(''.join(html))
+    likes_preview.short_description = 'Active Likes Preview'
+
+class CategoryLikeAdmin(admin.ModelAdmin):
+    list_display = ['user_email', 'category_name', 'created_at', 'is_active']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['user__email', 'category__name']
+    raw_id_fields = ['user', 'category']
+    date_hierarchy = 'created_at'
+    readonly_fields = ['created_at']
+    list_per_page = 25
+
+    def user_email(self, obj):
+        if obj.user:
+            url = reverse('admin:accounts_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.email)
+        return 'Deleted User'
+    user_email.short_description = 'User'
+    user_email.admin_order_field = 'user__email'
+
+    def category_name(self, obj):
+        url = reverse('admin:scraping_researchpapercategory_change', args=[obj.category.id])
+        return format_html('<a href="{}">{}</a>', url, obj.category.name)
+    category_name.short_description = 'Category'
+    category_name.admin_order_field = 'category__name'
+
+# Register all models
 admin.site.register(ResearchPaper, ResearchPaperAdmin)
+admin.site.register(BookmarkedPaper, BookmarkedPaperAdmin)
+admin.site.register(ResearchPaperCategory, ResearchPaperCategoryAdmin)
+admin.site.register(CategoryLike, CategoryLikeAdmin)
 
 # Update admin site info
 admin.site.site_header = 'Research Paper Management'

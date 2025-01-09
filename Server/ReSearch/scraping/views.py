@@ -1,11 +1,16 @@
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import ResearchPaper, BookmarkedPaper
-from .serializers import ResearchPaperSerializer, BookmarkedPaperSerializer
+from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike
+from .serializers import (
+    ResearchPaperSerializer, 
+    BookmarkedPaperSerializer,
+    CategorySerializer,
+    CategoryLikeSerializer
+)
 
 def apply_filters(queryset, request):
     """Apply filters to queryset based on request parameters."""
@@ -27,17 +32,18 @@ def apply_filters(queryset, request):
         
     return queryset.filter(**filters)
 
+# Existing Research Paper views
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list(request):
     if request.method == 'GET':
         queryset = ResearchPaper.objects.all()
         filtered_queryset = apply_filters(queryset, request)
-        serializer = ResearchPaperSerializer(filtered_queryset, many=True)
+        serializer = ResearchPaperSerializer(filtered_queryset, many=True, context={'request': request})
         return Response(serializer.data)
     
     elif request.method == 'POST':
-        serializer = ResearchPaperSerializer(data=request.data)
+        serializer = ResearchPaperSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -49,14 +55,15 @@ def research_paper_detail(request, pk):
     paper = get_object_or_404(ResearchPaper, pk=pk)
     
     if request.method == 'GET':
-        serializer = ResearchPaperSerializer(paper)
+        serializer = ResearchPaperSerializer(paper, context={'request': request})
         return Response(serializer.data)
     
     elif request.method in ['PUT', 'PATCH']:
         serializer = ResearchPaperSerializer(
             paper,
             data=request.data,
-            partial=(request.method == 'PATCH')
+            partial=(request.method == 'PATCH'),
+            context={'request': request}
         )
         if serializer.is_valid():
             serializer.save()
@@ -64,7 +71,6 @@ def research_paper_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     elif request.method == 'DELETE':
-        # Check for active bookmarks before deletion
         if paper.paper_bookmarks.filter(is_active=True).exists():
             return Response(
                 {"error": "Cannot delete paper with active bookmarks"},
@@ -73,6 +79,105 @@ def research_paper_detail(request, pk):
         paper.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+# New Category views
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def category_list(request):
+    if request.method == 'GET':
+        categories = ResearchPaperCategory.objects.all()
+        serializer = CategorySerializer(categories, many=True, context={'request': request})
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        serializer = CategorySerializer(
+            data=request.data, 
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save(created_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def category_detail(request, pk):
+    category = get_object_or_404(ResearchPaperCategory, pk=pk)
+    
+    if request.method == 'GET':
+        serializer = CategorySerializer(category, context={'request': request})
+        return Response(serializer.data)
+    
+    elif request.method in ['PUT', 'PATCH']:
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        if category.created_by != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        serializer = CategorySerializer(
+            category,
+            data=request.data,
+            partial=(request.method == 'PATCH'),
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        if category.created_by != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        category.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def toggle_category_like(request, pk):
+    if not request.user.is_authenticated:
+        return Response(
+            {'error': 'Authentication required'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    category = get_object_or_404(ResearchPaperCategory, pk=pk)
+    like = CategoryLike.objects.filter(
+        user=request.user,
+        category=category,
+        is_active=True
+    ).first()
+    
+    if like:
+        like.delete()  # This will trigger the soft delete
+        return Response({'status': 'unliked'})
+    else:
+        like = CategoryLike.objects.create(
+            user=request.user,
+            category=category,
+            is_active=True
+        )
+        serializer = CategoryLikeSerializer(like)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+# Existing Bookmark views
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def bookmarked_papers(request):
@@ -88,7 +193,7 @@ def bookmarked_papers(request):
     ).distinct()
     
     filtered_queryset = apply_filters(queryset, request)
-    serializer = ResearchPaperSerializer(filtered_queryset, many=True)
+    serializer = ResearchPaperSerializer(filtered_queryset, many=True, context={'request': request})
     return Response(serializer.data)
 
 @api_view(['POST'])
@@ -119,3 +224,117 @@ def toggle_bookmark(request, pk):
         )
         serializer = BookmarkedPaperSerializer(bookmark)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def category_listonly(request):
+    """List all categories or create a new one"""
+    if request.method == 'GET':
+        categories = ResearchPaperCategory.objects.all()
+        data = [{
+            'id': cat.id,
+            'name': cat.name,
+            'icon': cat.icon,
+            'description': cat.description,
+            'like_count': cat.like_count,
+            'created_at': cat.created_at
+        } for cat in categories]
+        return Response(data)
+
+    elif request.method == 'POST':
+        categories_data = request.data  # List of category dictionaries
+        created_categories = []
+
+        for category_data in categories_data:
+            name = category_data.get('name')
+            icon = category_data.get('icon')
+            description = category_data.get('description')
+
+            # Ensure required fields are provided
+            if not name or not icon or not description:
+                return Response({"error": "All fields (name, icon, description) are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+            category = ResearchPaperCategory.objects.create(
+                name=name,
+                icon=icon,
+                description=description,
+                created_by=request.user
+            )
+
+            created_categories.append({
+                'id': category.id,
+                'name': category.name,
+                'icon': category.icon,
+                'description': category.description,
+                'like_count': 0,
+                'created_at': category.created_at
+            })
+        
+        return Response(created_categories, status=status.HTTP_201_CREATED)
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def category_detailonly(request, pk):
+    """Retrieve, update or delete a category"""
+    category = get_object_or_404(ResearchPaperCategory, pk=pk)
+
+    if request.method == 'GET':
+        data = {
+            'id': category.id,
+            'name': category.name,
+            'icon': category.icon,
+            'description': category.description,
+            'like_count': category.like_count,
+            'created_at': category.created_at,
+            'updated_at': category.updated_at
+        }
+        return Response(data)
+
+    elif request.method == 'PUT':
+        if category.created_by != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        category.name = request.data.get('name', category.name)
+        category.icon = request.data.get('icon', category.icon)
+        category.description = request.data.get('description', category.description)
+        category.save()
+        
+        data = {
+            'id': category.id,
+            'name': category.name,
+            'icon': category.icon,
+            'description': category.description,
+            'like_count': category.like_count,
+            'updated_at': category.updated_at
+        }
+        return Response(data)
+
+    elif request.method == 'DELETE':
+        if category.created_by != request.user and not request.user.is_staff:
+            return Response(
+                {'error': 'Permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        category.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def category_like_list(request):
+    """List all liked categories"""
+    likes = CategoryLike.objects.filter(user=request.user, is_active=True)
+    data = [{
+        'id': like.category.id,
+        'name': like.category.name,
+        'icon': like.category.icon,
+        'description': like.category.description,
+        'like_count': like.category.like_count,
+        'created_at': like.category.created_at
+    } for like in likes]
+    return Response(data)
+   

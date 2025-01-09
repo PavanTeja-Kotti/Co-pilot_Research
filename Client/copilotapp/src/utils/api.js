@@ -156,6 +156,15 @@ class BaseService {
     accounts() {
         return new AccountsService(this);
     }
+
+    scraping() {
+        return new ScrapingService(this);
+    }
+
+
+    categories() {
+        return new CategoryService(this);
+    }
 }
 
 class AccountsService {
@@ -179,7 +188,7 @@ class AccountsService {
                 
                 return this.baseService.formatResponse(
                     true,
-                    response.data.user,
+                     response.data.user,
                     'Login successful'
                 );
             }
@@ -335,6 +344,104 @@ class AccountsService {
             );
         }
     }
+}
+
+class ScrapingService{
+    constructor(baseService){
+        this.baseService = baseService;
+        this.endpoint = '/scraping';
+    }
+
+    
+}
+
+class CategoryService extends ScrapingService {
+
+    async getCategories() {
+        return this.baseService.request(`${this.endpoint}/categoriesonly/`);
+    }
+
+    async getCategory(categoryId) {
+        return this.baseService.request(`${this.endpoint}/categoriesonly/${categoryId}/`);
+    }
+
+    async createCategory(categoryData) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/categoriesonly/`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify(categoryData)
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Category creation request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Category creation failed',
+                error.message
+            );
+        }
+    }
+
+    async updateCategory(categoryId, categoryData) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/categoriesonly/${categoryId}/`,
+                {
+                    method: 'PATCH',
+                    body: JSON.stringify(categoryData)
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Category update request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Category update failed',
+                error.message
+            );
+        }
+    }
+
+
+    async deleteCategory(categoryId) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/categoriesonly/${categoryId}/`,
+                {
+                    method: 'DELETE'
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Category deletion request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Category deletion failed',
+                error.message
+            );
+        }
+    }
+
+    async category_like_list(){
+        return this.baseService.request(`${this.endpoint}/categories_like_list/`);
+    }
+
+
+
+    
+
+
+
+   
 }
 
 
