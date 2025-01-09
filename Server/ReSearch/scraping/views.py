@@ -323,18 +323,53 @@ def category_detailonly(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
     
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def category_like_list(request):
-    """List all liked categories"""
-    likes = CategoryLike.objects.filter(user=request.user, is_active=True)
-    data = [{
-        'id': like.category.id,
-        'name': like.category.name,
-        'icon': like.category.icon,
-        'description': like.category.description,
-        'like_count': like.category.like_count,
-        'created_at': like.category.created_at
-    } for like in likes]
-    return Response(data)
+    """List all liked categories or like/unlike categories in bulk"""
+    if request.method == 'GET':
+        likes = CategoryLike.objects.filter(user=request.user, is_active=True)
+        data = [{
+            'id': like.category.id,
+            'name': like.category.name,
+            'icon': like.category.icon,
+            'description': like.category.description,
+            'like_count': like.category.like_count,
+            'created_at': like.category.created_at
+        } for like in likes]
+        return Response(data)
+    
+    elif request.method == 'POST':
+        category_ids = request.data.get('category_ids', [])  # List of category_ids from the request
+        
+        # Ensure category_ids is a list and not empty
+        if not category_ids or not isinstance(category_ids, list):
+            return Response({"error": "category_ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        response_data = []
+        
+        for category_id in category_ids:
+            category = get_object_or_404(ResearchPaperCategory, pk=category_id)
+            like = CategoryLike.objects.filter(user=request.user, category=category, is_active=True).first()
+
+            if like:
+                # Unliking the category
+                like.hard_delete()
+                response_data.append({'category_id': category.id, 'status': 'unliked'})
+            else:
+                # Liking the category
+                like = CategoryLike.objects.create(user=request.user, category=category, is_active=True)
+                data = {
+                    'id': like.category.id,
+                    'name': like.category.name,
+                    'icon': like.category.icon,
+                    'description': like.category.description,
+                    'like_count': like.category.like_count,
+                    'created_at': like.category.created_at
+                }
+                response_data.append({'category_id': category.id, 'status': 'liked'})
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
    

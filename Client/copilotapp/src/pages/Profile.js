@@ -56,7 +56,7 @@ const { Title, Text, Paragraph } = Typography;
 const { useToken } = theme;
 
 const Profile = () => {
-  const { user, updateProfile, changePassword, logout, category_like_list } =
+  const { user, updateProfile, changePassword, logout, category_like_list,updateCategorylist } =
     useAuth();
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
@@ -504,6 +504,7 @@ const Profile = () => {
                           ?.map(item => item.id) || []
                         }
                         onUpdateInterests={async (interests) => {
+                          await updateCategorylist(interests);
                           setLoading(true);
                           try {
                             message.success(
@@ -518,7 +519,7 @@ const Profile = () => {
                           }
                         }}
                         loading={loading}
-                        showSubmitButton={false}
+                        showSubmitButton={true}
                         containerHeight="100%"
                       />
                     </div>

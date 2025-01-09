@@ -138,12 +138,45 @@ export const AuthProvider = ({ children }) => {
     setUser((prev) => ({ ...prev, category_like_list: response.data }));
     return response;
   };
-  const updateCategorylist = async (category_id, like) => {
-    const response = await api
-      .categories()
-      .updateCategorylist(category_id, like);
-    setUser((prev) => ({ ...prev, category_like_list: response.data }));
+
+  const updateCategorylist = async (category_ids) => {
+    const currentLikedCategories = user?.category_like_list
+    ?.filter(item => item?.id)
+    ?.map(item => item.id) || []// Already liked categories
+    const categoriesToLike = [];
+    const categoriesToUnlike = [];
+    // First add all currently liked categories that appear in the input to unlike
+    currentLikedCategories.forEach(id => {
+      if (category_ids.includes(id)) {
+        categoriesToUnlike.push(id);
+      }
+    });
+    
+    const clickCounts = {};
+    category_ids.forEach(id => {
+      clickCounts[id] = (clickCounts[id] || 0) + 1;
+    });
+    
+    // Add to likes based on rules
+    category_ids.forEach(id => {
+      // For already liked categories, add to likes if clicked multiple times
+      if (currentLikedCategories.includes(id)) {
+        if (clickCounts[id] > 1 && !categoriesToLike.includes(id)) {
+          categoriesToLike.push(id);
+        }
+      } 
+      else {
+        if (clickCounts[id] % 2 === 1 && !categoriesToLike.includes(id)) {
+          categoriesToLike.push(id);
+        }
+      }
+    });
+    const combinedlikeandUnlike = [...categoriesToLike, ...categoriesToUnlike];
+    const response = await api.categories().updateCategoryLikeList(combinedlikeandUnlike);
+    console.log(combinedlikeandUnlike);
+    await category_like_list();
     return response;
+
   };
 
   if (loading) return <div>Loading...</div>;
@@ -159,6 +192,7 @@ export const AuthProvider = ({ children }) => {
         deleteProfile,
         changePassword,
         category_like_list,
+        updateCategorylist
       }}
     >
       {children}

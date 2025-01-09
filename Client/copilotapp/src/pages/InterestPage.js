@@ -96,9 +96,11 @@ const ResearchInterests = ({
   const [localSelectedInterests, setLocalSelectedInterests] =
     useState(selectedInterests);
   const [researchFields, setResearchFields] = useState([]);
+  const [category_ids, setCategory_ids] = useState([]);
   
 
   const toggleInterest = (interestId) => {
+    setCategory_ids([...category_ids, interestId]);
     const newSelection = localSelectedInterests.includes(interestId)
       ? localSelectedInterests.filter((id) => id !== interestId)
       : [...localSelectedInterests, interestId];
@@ -113,7 +115,9 @@ const ResearchInterests = ({
   
 
   const handleSubmit = () => {
-    onUpdateInterests(localSelectedInterests);
+    onUpdateInterests(category_ids);
+    setCategory_ids([]);
+    
   };
 
 
@@ -307,13 +311,13 @@ const ResearchInterests = ({
 };
 
 const InterestPage = () => {
-  const { user, updateUserInterests } = useAuth();
+  const { user, updateCategorylist } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const { token } = useToken();
 
   useEffect(() => {
-    if (user?.first_login) {
+    if (!user?.first_login) {
       navigate("/", { replace: true });
     }
   }, [user, navigate]);
@@ -339,7 +343,7 @@ const InterestPage = () => {
           onUpdateInterests={async (interests) => {
             setLoading(true);
             try {
-              await updateUserInterests(interests);
+              await updateCategorylist(interests);
               message.success("Research interests updated successfully!");
               navigate("/", { replace: true });
             } catch (error) {

@@ -435,6 +435,33 @@ class CategoryService extends ScrapingService {
         return this.baseService.request(`${this.endpoint}/categories_like_list/`);
     }
 
+    async updateCategoryLikeList(categoryIds) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/categories_like_list/`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ category_ids: categoryIds })
+                }
+            );
+
+            return response;
+
+        }
+
+        catch (error) {
+            console.error('Category like list update request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Category like list update failed',
+                error.message
+            );
+        }
+
+
+    }
+
 
 
     
