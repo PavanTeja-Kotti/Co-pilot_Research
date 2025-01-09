@@ -159,12 +159,12 @@ const Profile = () => {
                   <Text type="secondary"><GlobalOutlined /> Username</Text>
                   <Paragraph strong>{user.username}</Paragraph>
                 </div>
-                {user.bio && (
+                {/* {user.bio && (
                   <div>
                     <Text type="secondary"><InfoCircleOutlined /> Bio</Text>
                     <Paragraph>{user.bio}</Paragraph>
                   </div>
-                )}
+                )} */}
               </Space>
             </div>
           </Card>

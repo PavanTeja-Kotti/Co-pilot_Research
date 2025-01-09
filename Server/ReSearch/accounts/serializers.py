@@ -25,16 +25,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         if data['password'] != data['password_confirm']:
             raise ValidationError("Passwords don't match")
         
-        # Add validation for base64 image if provided
         if 'profile_image' in data:
             try:
-                # Check if the string is valid base64
                 import base64
                 base64.b64decode(data['profile_image'])
             except Exception:
                 raise ValidationError("Invalid base64 string for profile image")
             
-            # Optional: Add size validation
             if len(data['profile_image']) > 5 * 1024 * 1024:  # 5MB limit
                 raise ValidationError("Profile image size should not exceed 5MB")
         
@@ -44,14 +41,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop('password_confirm')
         return User.objects.create_user(**validated_data)
 
-class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField()
-
 class UpdateUserSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(read_only=True)  # Make email read-only by default
+    
     class Meta:
         model = User
-        fields = ('first_name', 'last_name', 'profile_image', 'bio')
+        fields = ('email', 'first_name', 'last_name', 'profile_image', 'bio' ,'username')
         
     def validate_profile_image(self, value):
         if value:
@@ -64,3 +59,25 @@ class UpdateUserSerializer(serializers.ModelSerializer):
             if len(value) > 5 * 1024 * 1024:  # 5MB limit
                 raise ValidationError("Profile image size should not exceed 5MB")
         return value
+
+class AdminUpdateUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('email', 'first_name', 'last_name', 'profile_image', 'bio', 
+                 'is_active', 'is_staff', 'username')
+
+    def validate_profile_image(self, value):
+        if value:
+            try:
+                import base64
+                base64.b64decode(value)
+            except Exception:
+                raise ValidationError("Invalid base64 string for profile image")
+            
+            if len(value) > 5 * 1024 * 1024:
+                raise ValidationError("Profile image size should not exceed 5MB")
+        return value
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()

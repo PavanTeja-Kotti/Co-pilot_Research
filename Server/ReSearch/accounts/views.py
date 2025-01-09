@@ -9,7 +9,8 @@ from .serializers import (
     UserSerializer, 
     RegisterSerializer, 
     LoginSerializer,
-    UpdateUserSerializer
+    UpdateUserSerializer,
+    AdminUpdateUserSerializer
 )
 from .models import User
 
@@ -78,7 +79,10 @@ def user_profile(request):
         return Response(serializer.data)
     
     elif request.method == 'PATCH':
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        # Choose serializer based on user role
+        SerializerClass = AdminUpdateUserSerializer if request.user.is_superuser else UpdateUserSerializer
+        serializer = SerializerClass(request.user, data=request.data, partial=True)
+        
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -98,7 +102,9 @@ def update_profile(request):
     """
     Update user profile including profile image and bio
     """
-    serializer = UpdateUserSerializer(request.user, data=request.data, partial=True)
+    SerializerClass = AdminUpdateUserSerializer if request.user.is_superuser else UpdateUserSerializer
+    serializer = SerializerClass(request.user, data=request.data, partial=True)
+    
     if serializer.is_valid():
         serializer.save()
         return Response({
@@ -169,7 +175,7 @@ def user_detail(request, user_id):
         return Response(serializer.data)
     
     elif request.method == 'PATCH':
-        serializer = UserSerializer(user, data=request.data, partial=True)
+        serializer = AdminUpdateUserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

@@ -24,8 +24,6 @@ class User(AbstractUser):
     date_joined = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    
-    # New fields
     profile_image = models.TextField(blank=True, null=True, help_text="Base64 encoded profile image")
     bio = models.TextField(blank=True, null=True, help_text="User biography")
 
