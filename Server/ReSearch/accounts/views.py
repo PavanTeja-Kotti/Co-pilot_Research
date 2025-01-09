@@ -5,7 +5,13 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
-from .serializers import UserSerializer, RegisterSerializer, LoginSerializer
+from .serializers import (
+    UserSerializer, 
+    RegisterSerializer, 
+    LoginSerializer,
+    UpdateUserSerializer,
+    AdminUpdateUserSerializer
+)
 from .models import User
 
 @api_view(['POST'])
@@ -73,7 +79,10 @@ def user_profile(request):
         return Response(serializer.data)
     
     elif request.method == 'PATCH':
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        # Choose serializer based on user role
+        SerializerClass = AdminUpdateUserSerializer if request.user.is_superuser else UpdateUserSerializer
+        serializer = SerializerClass(request.user, data=request.data, partial=True)
+        
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -86,6 +95,23 @@ def user_profile(request):
         return Response({
             'message': 'User deactivated successfully'
         }, status=status.HTTP_200_OK)
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    """
+    Update user profile including profile image and bio
+    """
+    SerializerClass = AdminUpdateUserSerializer if request.user.is_superuser else UpdateUserSerializer
+    serializer = SerializerClass(request.user, data=request.data, partial=True)
+    
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            'message': 'Profile updated successfully',
+            'user': UserSerializer(request.user).data
+        })
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -149,7 +175,7 @@ def user_detail(request, user_id):
         return Response(serializer.data)
     
     elif request.method == 'PATCH':
-        serializer = UserSerializer(user, data=request.data, partial=True)
+        serializer = AdminUpdateUserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)

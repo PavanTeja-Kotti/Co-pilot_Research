@@ -24,6 +24,8 @@ class User(AbstractUser):
     date_joined = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    profile_image = models.TextField(blank=True, null=True, help_text="Base64 encoded profile image")
+    bio = models.TextField(blank=True, null=True, help_text="User biography")
 
     objects = UserManager()
 
@@ -32,4 +34,3 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
-
