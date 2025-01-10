@@ -3,19 +3,19 @@ from django.contrib.auth.admin import UserAdmin
 from .models import User
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('email', 'username', 'first_name', 'last_name', 'is_staff', 'date_joined')
-    list_filter = ('is_staff', 'is_active', 'date_joined')
+    list_display = ('email', 'username', 'first_name', 'last_name', 'is_staff', 
+                   'date_joined', 'last_login_at', 'first_login')
+    list_filter = ('is_staff', 'is_active', 'date_joined', 'first_login')
     search_fields = ('email', 'username', 'first_name', 'last_name')
     ordering = ('-date_joined',)
     
-    # Define the fieldsets for add/edit forms
     fieldsets = (
         (None, {'fields': ('email', 'username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'profile_image', 'bio')}),
+        ('Login info', {'fields': ('last_login_at', 'first_login')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
     )
     
-    # Define the fields for adding a new user
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
@@ -24,8 +24,7 @@ class CustomUserAdmin(UserAdmin):
         ),
     )
 
-    # Add a readonly field for displaying the profile image preview
-    readonly_fields = ('profile_image_preview',)
+    readonly_fields = ('profile_image_preview', 'last_login_at', 'first_login')
 
     def profile_image_preview(self, obj):
         if obj.profile_image:

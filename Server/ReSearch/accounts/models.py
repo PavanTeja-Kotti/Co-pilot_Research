@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.utils import timezone
 
 class UserManager(BaseUserManager):
     def create_user(self, email, username, password=None, **extra_fields):
@@ -26,6 +27,8 @@ class User(AbstractUser):
     is_staff = models.BooleanField(default=False)
     profile_image = models.TextField(blank=True, null=True, help_text="Base64 encoded profile image")
     bio = models.TextField(blank=True, null=True, help_text="User biography")
+    last_login_at = models.DateTimeField(null=True, blank=True)
+    first_login = models.BooleanField(default=True)
 
     objects = UserManager()
 
@@ -34,3 +37,16 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    def login(self):
+        """Update login-related fields when user logs in"""
+        if self.first_login:
+            self.first_login = False
+            self.save(update_fields=['first_login'])
+        self.last_login_at = timezone.now()
+        self.save(update_fields=['last_login_at'])
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:  # Only on first save/creation
+            self.first_login = True
+        super().save(*args, **kwargs)

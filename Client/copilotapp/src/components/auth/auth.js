@@ -63,7 +63,6 @@ const Login = () => {
     setLoading(true);
     try {
       await login(values.email, values.password);
-      navigate('/');
     } catch (err) {
       message.error(err.message);
     } finally {

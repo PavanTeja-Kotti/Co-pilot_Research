@@ -23,11 +23,11 @@ def register(request):
         refresh = RefreshToken.for_user(user)
         return Response({
             'message': 'Registration successful',
-            # 'user': UserSerializer(user).data,
-            # 'tokens': {
-            #     'refresh': str(refresh),
-            #     'access': str(refresh.access_token),
-            # }
+            'user': UserSerializer(user).data,
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -43,13 +43,23 @@ def login(request):
         )
         if user:
             refresh = RefreshToken.for_user(user)
+            
+            # Store first_login value before updating
+            is_first_time = user.first_login
+            
+            # Update login status
+            user.login()
+
+            user_data = UserSerializer(user).data
+            user_data['first_login'] = is_first_time
+            
             return Response({
                 'message': 'Login successful',
-                'user': UserSerializer(user).data,
+                'user': user_data,
                 'tokens': {
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
-                }
+                },
             })
         return Response({
             'error': 'Invalid credentials'
@@ -79,7 +89,6 @@ def user_profile(request):
         return Response(serializer.data)
     
     elif request.method == 'PATCH':
-        # Choose serializer based on user role
         SerializerClass = AdminUpdateUserSerializer if request.user.is_superuser else UpdateUserSerializer
         serializer = SerializerClass(request.user, data=request.data, partial=True)
         
@@ -96,47 +105,13 @@ def user_profile(request):
             'message': 'User deactivated successfully'
         }, status=status.HTTP_200_OK)
 
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def update_profile(request):
-    """
-    Update user profile including profile image and bio
-    """
-    SerializerClass = AdminUpdateUserSerializer if request.user.is_superuser else UpdateUserSerializer
-    serializer = SerializerClass(request.user, data=request.data, partial=True)
-    
-    if serializer.is_valid():
-        serializer.save()
-        return Response({
-            'message': 'Profile updated successfully',
-            'user': UserSerializer(request.user).data
-        })
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def change_password(request):
-    user = request.user
-    old_password = request.data.get('old_password')
-    new_password = request.data.get('new_password')
-
-    if not user.check_password(old_password):
-        return Response({
-            'error': 'Invalid old password'
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    user.set_password(new_password)
-    user.save()
-    return Response({
-        'message': 'Password changed successfully'
-    })
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def check_auth_status(request):
     return Response({
         'isAuthenticated': True,
-        'user': UserSerializer(request.user).data
+        'user': UserSerializer(request.user).data,
+        'first_time_login': request.user.first_login
     })
 
 # Admin only views
