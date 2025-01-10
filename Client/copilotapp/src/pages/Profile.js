@@ -519,7 +519,7 @@ const Profile = () => {
                           }
                         }}
                         loading={loading}
-                        showSubmitButton={true}
+                        showSubmitButton={false}
                         containerHeight="100%"
                       />
                     </div>

@@ -22,12 +22,28 @@ const { useToken } = theme;
 
  // Import a fallback icon from Ant Design
 
-const DynamicIconRenderer = ({ iconName }) => {
-  const IconComponent = Icons[iconName]; // Resolve icon from Icons
-  
-  // If no valid icon is found, render a fallback icon (QuestionCircleOutlined in this case)
-  return IconComponent ? <IconComponent /> : <Icons.QuestionCircleOutlined />;
+ const DynamicIconRenderer = ({ iconName }) => {
+  try {
+    // Handle SVG content if iconName starts with 'svg:'
+    if (iconName?.startsWith('svg:')) {
+      const svgContent = iconName.substring(4); // Remove 'svg:' prefix
+      return (
+        <span className="anticon" role="img" aria-label="custom-icon">
+          <span dangerouslySetInnerHTML={{ __html: svgContent }} />
+        </span>
+      );
+    }
+
+    // Original logic for Ant Design icons
+    const IconComponent = Icons[iconName];
+    return IconComponent ? <IconComponent /> : <Icons.QuestionCircleOutlined />;
+  } catch (error) {
+    // Return question mark icon for any errors
+    return <Icons.QuestionCircleOutlined />;
+  }
 };
+
+
 
 const ResearchInterestField = ({ field, isSelected, onToggle }) => {
   const { token } = useToken();

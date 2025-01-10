@@ -34,6 +34,10 @@ const NotificationItem = ({ notification, onDismiss }) => {
                     border-left: 4px solid #ff4d4f;
                 }
 
+                .notification-success {
+                    border-left: 4px solid #52c41a;
+                }
+
                 .notification-content {
                     margin: 0;
                 }
@@ -119,8 +123,12 @@ export const NotificationProvider = ({ children }) => {
         showNotification('error', title, message);
     };
 
+    const showSuccess = (message, title = 'Success') => {
+        showNotification('success', title, message);
+    };
+
     return (
-        <NotificationContext.Provider value={{ showError }}>
+        <NotificationContext.Provider value={{ showError, showSuccess }}>
             {children}
             <div 
                 style={{

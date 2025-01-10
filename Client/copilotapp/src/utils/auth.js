@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { showError } = useNotification();
+  const { showError, showSuccess } = useNotification();
 
   useEffect(() => {
     // Set up API error handling
@@ -35,14 +35,12 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-  // And update the login function
   const login = async (email, password) => {
     const response = await api.accounts().login(email, password);
     if (response.success) {
       const hasInterests = response.data && response.data?.first_login;
-      // Set user after determining the navigation path
       setUser(response.data);
-      // Use setTimeout to ensure state update happens before navigation
+      showSuccess('Logged in successfully');
       setTimeout(() => {
         navigate(hasInterests ? "/interest" : "/");
       }, 0);
@@ -70,8 +68,8 @@ export const AuthProvider = ({ children }) => {
         last_name
       );
     if (response.success) {
-      // setUser(response.data);
       navigate("/login");
+      showSuccess('Registration successful. Please login to continue.');
       return response.data;
     }
     throw new Error(response.message || "Registration failed");
@@ -82,7 +80,7 @@ export const AuthProvider = ({ children }) => {
       const response = await api.accounts().updateProfile(userData);
       if (response.data) {
         setUser(response.data);
-        // showSuccess('Profile updated successfully');
+        showSuccess('Profile updated successfully');
         return response.data;
       }
       throw new Error("Failed to update profile");
@@ -97,7 +95,7 @@ export const AuthProvider = ({ children }) => {
       const response = await api.accounts().deleteProfile();
       if (response.data) {
         setUser(null);
-        // showSuccess('Account deactivated successfully');
+        showSuccess('Account deactivated successfully');
         navigate("/login");
         return response.data;
       }
@@ -114,12 +112,10 @@ export const AuthProvider = ({ children }) => {
         .accounts()
         .changePassword(oldPassword, newPassword);
       if (response.data) {
-        // setUser(null);
-        // showSuccess('Account deactivated successfully');
-        // navigate('/login');
+        showSuccess('Password changed successfully');
         return response.data;
       }
-      throw new Error("Failed to changePassword ");
+      throw new Error("Failed to change password");
     } catch (error) {
       showError(error.message);
       throw error;
@@ -130,6 +126,7 @@ export const AuthProvider = ({ children }) => {
     const response = await api.accounts().logout();
     setUser(null);
     navigate("/login");
+    showSuccess('Logged out successfully');
     return response;
   };
 
@@ -141,11 +138,11 @@ export const AuthProvider = ({ children }) => {
 
   const updateCategorylist = async (category_ids) => {
     const currentLikedCategories = user?.category_like_list
-    ?.filter(item => item?.id)
-    ?.map(item => item.id) || []// Already liked categories
+      ?.filter(item => item?.id)
+      ?.map(item => item.id) || [];
     const categoriesToLike = [];
     const categoriesToUnlike = [];
-    // First add all currently liked categories that appear in the input to unlike
+
     currentLikedCategories.forEach(id => {
       if (category_ids.includes(id)) {
         categoriesToUnlike.push(id);
@@ -157,26 +154,24 @@ export const AuthProvider = ({ children }) => {
       clickCounts[id] = (clickCounts[id] || 0) + 1;
     });
     
-    // Add to likes based on rules
     category_ids.forEach(id => {
-      // For already liked categories, add to likes if clicked multiple times
       if (currentLikedCategories.includes(id)) {
         if (clickCounts[id] > 1 && !categoriesToLike.includes(id)) {
           categoriesToLike.push(id);
         }
-      } 
-      else {
+      } else {
         if (clickCounts[id] % 2 === 1 && !categoriesToLike.includes(id)) {
           categoriesToLike.push(id);
         }
       }
     });
+
     const combinedlikeandUnlike = [...categoriesToLike, ...categoriesToUnlike];
     const response = await api.categories().updateCategoryLikeList(combinedlikeandUnlike);
     console.log(combinedlikeandUnlike);
     await category_like_list();
+    showSuccess('Categories updated successfully');
     return response;
-
   };
 
   if (loading) return <div>Loading...</div>;

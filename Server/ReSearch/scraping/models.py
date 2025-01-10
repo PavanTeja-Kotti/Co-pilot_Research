@@ -63,7 +63,7 @@ class BookmarkedPaper(models.Model):
 # Category models as separate entities
 class ResearchPaperCategory(models.Model):
     name = models.CharField(max_length=100)
-    icon = models.CharField(max_length=50)
+    icon = models.TextField(null=True, blank=True)
     description = models.TextField()
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
