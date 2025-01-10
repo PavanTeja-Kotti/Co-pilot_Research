@@ -504,6 +504,7 @@ const Profile = () => {
                           ?.map(item => item.id) || []
                         }
                         onUpdateInterests={async (interests) => {
+                          console.log("profile interests", interests);
                           await updateCategorylist(interests);
                           setLoading(true);
                           try {

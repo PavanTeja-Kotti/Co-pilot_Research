@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotification } from "./NotificationContext";
+import createDebounce, { createAccumulatingDebounce } from "./debounce";
 
 import { useLocation, Navigate } from "react-router-dom";
 import api from "./api";
@@ -136,43 +137,73 @@ export const AuthProvider = ({ children }) => {
     return response;
   };
 
-  const updateCategorylist = async (category_ids) => {
-    const currentLikedCategories = user?.category_like_list
-      ?.filter(item => item?.id)
-      ?.map(item => item.id) || [];
-    const categoriesToLike = [];
-    const categoriesToUnlike = [];
 
-    currentLikedCategories.forEach(id => {
-      if (category_ids.includes(id)) {
-        categoriesToUnlike.push(id);
-      }
-    });
-    
-    const clickCounts = {};
-    category_ids.forEach(id => {
-      clickCounts[id] = (clickCounts[id] || 0) + 1;
-    });
-    
-    category_ids.forEach(id => {
-      if (currentLikedCategories.includes(id)) {
-        if (clickCounts[id] > 1 && !categoriesToLike.includes(id)) {
-          categoriesToLike.push(id);
+  const updateCategoryList = async (accumulatedState) => {
+    try {
+      const currentLikedCategories = user?.category_like_list
+        ?.filter(item => item?.id)
+        ?.map(item => item.id) || [];
+        
+      const categoriesToLike = [];
+      const categoriesToUnlike = [];
+  
+      Object.entries(accumulatedState).forEach(([id, clicks]) => {
+        const categoryId = Number(id);
+        const isCurrentlyLiked = currentLikedCategories.includes(categoryId);
+        
+        if (isCurrentlyLiked) {
+          if (clicks % 2 === 1) {
+            categoriesToUnlike.push(categoryId);
+          }
+        } else {
+          if (clicks % 2 === 1) {
+            categoriesToLike.push(categoryId);
+          }
         }
-      } else {
-        if (clickCounts[id] % 2 === 1 && !categoriesToLike.includes(id)) {
-          categoriesToLike.push(id);
-        }
+      });
+  
+      const combinedlikeandUnlike = [...categoriesToLike, ...categoriesToUnlike];
+      
+      if (combinedlikeandUnlike.length > 0) {
+        const response = await api.categories().updateCategoryLikeList(combinedlikeandUnlike);
+        await category_like_list();
+        showSuccess('Categories updated successfully');
+        return response;
       }
-    });
-
-    const combinedlikeandUnlike = [...categoriesToLike, ...categoriesToUnlike];
-    const response = await api.categories().updateCategoryLikeList(combinedlikeandUnlike);
-    console.log(combinedlikeandUnlike);
-    await category_like_list();
-    showSuccess('Categories updated successfully');
-    return response;
+      
+    } catch (error) {
+      console.error('Error updating categories:', error);
+      showError('Failed to update categories');
+      throw error;
+    }
   };
+  
+  // Create category handler with array support
+  const createCategoryHandler = () => {
+    const DELAY = 2000; // 2 seconds
+    return createDebounce(
+      updateCategoryList,
+      DELAY,
+      {
+        maxWait: DELAY * 1.5,
+        accumulator: (acc, value) => {
+          const newAcc = { ...(acc || {}) };
+          // Handle both single value and array of values
+          const values = Array.isArray(value) ? value : [value];
+          
+          values.forEach(id => {
+            newAcc[id] = (newAcc[id] || 0) + 1;
+          });
+          
+          return newAcc;
+        },
+        initialValue: {}
+      }
+    );
+  };
+  
+  // Create a single instance of the debounced handler
+  const updateCategorylist = createCategoryHandler();
 
   if (loading) return <div>Loading...</div>;
 
