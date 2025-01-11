@@ -19,10 +19,9 @@ const { Title, Text } = Typography;
 const { Content } = Layout;
 const { useToken } = theme;
 
+// Import a fallback icon from Ant Design
 
- // Import a fallback icon from Ant Design
-
- const DynamicIconRenderer = ({ iconName }) => {
+const DynamicIconRenderer = ({ iconName }) => {
   try {
     // Handle SVG content if iconName starts with 'svg:'
     if (iconName?.startsWith('svg:')) {
@@ -42,8 +41,6 @@ const { useToken } = theme;
     return <Icons.QuestionCircleOutlined />;
   }
 };
-
-
 
 const ResearchInterestField = ({ field, isSelected, onToggle }) => {
   const { token } = useToken();
@@ -110,13 +107,13 @@ const ResearchInterests = ({
   loading = false,
   containerHeight = "100%",
 }) => {
- 
+
   const { token } = useToken();
   const [localSelectedInterests, setLocalSelectedInterests] =
     useState(selectedInterests);
   const [researchFields, setResearchFields] = useState([]);
   const [category_ids, setCategory_ids] = useState([]);
-  
+
 
   const toggleInterest = (interestId) => {
     setCategory_ids([...category_ids, interestId]);
@@ -131,12 +128,12 @@ const ResearchInterests = ({
     }
   };
 
-  
+
 
   const handleSubmit = () => {
     onUpdateInterests(category_ids);
     setCategory_ids([]);
-    
+
   };
 
 
@@ -150,11 +147,6 @@ const ResearchInterests = ({
     }
     getResearchFields();
   }, []);
-
-
-
-  
-
 
   return (
     <>
@@ -340,8 +332,6 @@ const InterestPage = () => {
       navigate("/", { replace: true });
     }
   }, [user, navigate]);
-
-
 
   return (
     <Layout style={{ minHeight: "100vh", background: token.colorBgLayout }}>

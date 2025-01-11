@@ -120,6 +120,11 @@ const AppLayout = () => {
                             key: '/dashboard',
                             icon: <AppstoreOutlined />,
                             label: <Link to="/dashboard">Dashboard</Link>
+                        },
+                        {
+                            key: '/summarization',
+                            icon: <AppstoreOutlined />,
+                            label: <Link to="/summarization">summarization</Link>
                         }
                     ]}
                 />

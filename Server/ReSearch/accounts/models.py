@@ -50,3 +50,5 @@ class User(AbstractUser):
         if self._state.adding:  # Only on first save/creation
             self.first_login = True
         super().save(*args, **kwargs)
+
+

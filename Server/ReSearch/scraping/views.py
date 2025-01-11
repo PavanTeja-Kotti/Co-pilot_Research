@@ -370,6 +370,39 @@ def category_like_list(request):
                 response_data.append({'category_id': category.id, 'status': 'liked'})
 
         return Response(response_data, status=status.HTTP_200_OK)
+    
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def summarization_paper(request, pdf_url=None):
+    if request.method == 'POST':
+        # Get the PDF URL from the frontend
+        pdf_url = request.data.get('pdf_url', None)
+        print(" PDF URL: ", pdf_url)
 
-   
+        if not pdf_url:
+            return Response({"error": "PDF URL is required"}, status=status.HTTP_400_BAD_REQUEST)
+        # Query the database for the research paper
+        try:
+            research_paper = ResearchPaper.objects.get(pdf_url=pdf_url)
+        except ResearchPaper.DoesNotExist:
+            return Response({"error": "Research paper not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            summary = summarize_pdf(pdf_url)  # This function should handle the summarization
+        except Exception as e:
+            return Response({"error": f"Summarization failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Prepare response data
+        response_data = {
+            "title": research_paper.title,
+            "summary": summary,
+            "pdf_url": pdf_url,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    return Response({"error": "Invalid request method"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+def summarize_pdf(pdf_url):
+    return "Summarized text"
