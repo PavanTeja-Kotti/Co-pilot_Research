@@ -433,9 +433,9 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
             chat = Chat.objects.get(id=chat_id)
             if chat.participants.filter(id=self.user.id).exists():
                 chat_data = ChatSerializer(chat, context={'user': self.user}).data
-                chat.is_active = False
-                chat.save()
+                chat.hard_delete()
                 return chat_data
+
             logger.warning(f"Unauthorized chat deletion attempt: {chat_id}")
             return None
         except Chat.DoesNotExist:
@@ -452,8 +452,9 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
             group = GroupChat.objects.get(id=group_id)
             if self.user == group.creator or group.admins.filter(id=self.user.id).exists():
                 group_data = GroupChatSerializer(group, context={'user': self.user}).data
-                group.is_active = False
-                group.save()
+                # group.is_active = False
+                # group.save()
+                group.hard_delete()
                 return group_data
             logger.warning(f"Unauthorized group deletion attempt: {group_id}")
             return None

@@ -48,6 +48,10 @@ class Chat(BaseChat):
         participants = self.participants.all()
         return f"Chat between {', '.join([str(p) for p in participants])}"
     
+    def hard_delete(self):
+        """Hard delete the chat and associated messages"""
+        self.delete();  # Delete the chat
+    
    
 
 class GroupChat(BaseChat):
@@ -84,6 +88,10 @@ class GroupChat(BaseChat):
 
     def __str__(self):
         return f"Group: {self.name}"
+    
+    def hard_delete(self):
+        """Hard delete the group chat and associated messages"""
+        self.delete();
 
 class GroupMembership(models.Model):
     """Model to track group chat membership details"""

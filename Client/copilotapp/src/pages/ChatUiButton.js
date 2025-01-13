@@ -183,6 +183,16 @@ const ChatUI = () => {
 
   // WebSocket message handler
   const handleManagementMessage = useCallback((data) => {
+
+ 
+    if (data.type === 'chat_deleted') {
+
+      setChats(prevChats => prevChats.filter(chat => chat.id !== data.chat_id && chat.type !='private'));
+      setSelectedChat(null)
+
+      
+    }
+
     if (data.type === 'chats_list') {
       const formattedChats = data.chats.map(formatChatData);
       setChats(formattedChats);

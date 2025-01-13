@@ -502,6 +502,24 @@ class ChatAPI {
         await this.ws.connect('chat', chatId);
     }
 
+    async deleteChat(chatId) {
+        await this.ws.connect('management');
+        return this.ws.send('management', null, {
+            command: 'delete_chat',
+            chat_id: chatId
+        });
+
+    }
+
+    async deleteGroup(groupId) {
+        await this.ws.connect('management');
+        return this.ws.send('management', null, {
+            command: 'delete_group',
+            group_id: groupId
+        });
+    }
+
+
     async leaveChat(chatId) {
         await this.ws.disconnect('chat', chatId);
     }
