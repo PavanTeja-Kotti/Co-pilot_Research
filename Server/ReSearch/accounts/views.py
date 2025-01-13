@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from .serializers import (
     UserSerializer, 
@@ -166,9 +167,25 @@ def user_detail(request, user_id):
         return Response({
             'message': f'User {user.email} deactivated successfully'
         })
-    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search(request, query=None):
+    if query:
+        users = User.objects.filter(
+            Q(email__icontains=query) | 
+            Q(username__icontains=query) | 
+            Q(first_name__icontains=query),
+            is_active=True
+        ).exclude(id=request.user.id).distinct()
+    else:
+        users = User.objects.filter(is_active=True).exclude(id=request.user.id)[:20]  # Return 20 users if no query
 
+    user_data = list(users.values(
+        'id', 'email', 'username', 'first_name', 'last_name', 
+        'profile_image'
+    ))
 
+    return Response(user_data)
 
 
 

@@ -13,6 +13,9 @@ urlpatterns = [
     path('auth-status/', views.check_auth_status, name='auth-status'),
     path('users/', views.user_management, name='user-management'),
     path('users/<int:user_id>/', views.user_detail, name='user-detail'),
+    path('search/', views.search, name='search'),  # No query provided
+    path('search/<str:query>/', views.search, name='search_with_query'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
 
     path('notifications/', views.user_notifications, name='user-notifications'),

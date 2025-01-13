@@ -10,6 +10,7 @@ import {
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
 import api from '../../utils/api';
+import ChatUiButton from '../../pages/ChatUiButton';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -286,6 +287,8 @@ const AppLayout = () => {
 
             <Content>
                 <Outlet />
+                <ChatUiButton />
+                
             </Content>
         </Layout>
     );

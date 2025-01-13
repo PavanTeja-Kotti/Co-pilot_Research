@@ -9,6 +9,7 @@ import Profile from './pages/Profile';
 import { useAuth } from './utils/auth';
 import PrivateRoute from './components/common/PrivateRoute';
 import {InterestPage} from './pages/InterestPage';
+import {chatapi} from './utils/socket';
 
 const PublicRoute = ({ children }) => {
   const { user } = useAuth();
@@ -36,6 +37,12 @@ const App = () => {
     const handleChange = (e) => setIsDarkMode(e.matches);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      // chatapi.destroy();
+    };
   }, []);
 
   const themeConfig = {

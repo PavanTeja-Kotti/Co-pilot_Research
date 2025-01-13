@@ -11,8 +11,13 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fileCache, setFileCache] = useState(new Map());
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
+
+
+
+
 
   useEffect(() => {
     // Set up API error handling
@@ -35,6 +40,71 @@ export const AuthProvider = ({ children }) => {
 
     checkAuth();
   }, []);
+
+
+  const getCachedFile = (filePath) => {
+    return fileCache.get(filePath);
+  };
+
+  const setCachedFile = (filePath, fileData) => {
+    setFileCache(prev => new Map(prev).set(filePath, fileData));
+  };
+
+  const downloadFile = async (filePath, onProgress) => {
+    // Check cache first
+
+    console.log("Downloaded file:", filePath);
+    const cachedFile = getCachedFile(filePath);
+    if (cachedFile) {
+      // If we have a cached file, simulate progress and return cached data
+      if (onProgress) {
+        onProgress(100);
+      }
+      return cachedFile;
+    }
+
+    try {
+      // If not in cache, download using general service
+      const fileData = await api.general().getFileWithProgress(filePath, onProgress);
+      
+      console.log('Downloaded file:', fileData);
+      // Cache the downloaded file
+      setCachedFile(filePath, fileData);
+      
+      return fileData;
+    } catch (error) {
+      showError('Failed to download file');
+      throw error;
+    }
+  };
+
+  const uploadFile = async (file, onProgress) => {
+    try {
+      const response = await api.general().uploadFileWithProgress(file, onProgress);
+      
+      // Pre-cache the uploaded file if we have the data
+      if (response.path && response.blob) {
+        setCachedFile(response.path, {
+          blob: response.blob,
+          fileName: response.name,
+          metadata: response.metadata,
+          download: () => api.general().downloadBlob(response.blob, response.name),
+          getUrl: () => window.URL.createObjectURL(response.blob)
+        });
+      }
+      
+      return response;
+    } catch (error) {
+      showError('Failed to upload file');
+      throw error;
+    }
+  };
+
+  const clearFileCache = () => {
+    // Clear all cached files
+    setFileCache(new Map());
+  };
+
 
   const login = async (email, password) => {
     const response = await api.accounts().login(email, password);
@@ -126,6 +196,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     const response = await api.accounts().logout();
     setUser(null);
+    clearFileCache(); // Clear file cache on logout
     navigate("/login");
     showSuccess('Logged out successfully');
     return response;
@@ -218,7 +289,11 @@ export const AuthProvider = ({ children }) => {
         deleteProfile,
         changePassword,
         category_like_list,
-        updateCategorylist
+        updateCategorylist,
+        downloadFile,
+        uploadFile,
+        getCachedFile,
+        clearFileCache
       }}
     >
       {children}

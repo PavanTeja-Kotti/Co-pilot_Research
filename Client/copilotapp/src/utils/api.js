@@ -169,6 +169,18 @@ class BaseService {
     notifications() {
         return new NotificationService(this);
     }
+
+    privateChat() {
+        return new PrivateChatService(this);
+    }
+
+    groupChat() {
+        return new GroupChatService(this);
+    }
+
+    general() {
+        return new GeneralService(this);
+    }
 }
 
 class AccountsService {
@@ -322,7 +334,10 @@ class AccountsService {
             this.baseService.clearTokens();
         }
     }
-
+    async serachUser(search) {
+        const endpoint = search ? `${this.endpoint}/search/${search}/` : `${this.endpoint}/search/`;
+        return this.baseService.request(endpoint);
+    }
 
     async changePassword(oldPassword, newPassword) {
         try {
@@ -533,6 +548,272 @@ class NotificationService extends AccountsService {
    
 
 }
+
+
+class PrivateChatService {
+    
+    constructor(baseService) {
+        this.baseService = baseService;
+        this.endpoint = '/chat/chats';
+    }
+
+    async getChatList() {
+        return this.baseService.request(`${this.endpoint}/`);
+    }
+
+    async createChat(participantId) {
+        return this.baseService.request(`${this.endpoint}/create/`, {
+            method: 'POST',
+            body: JSON.stringify({ participant_id: participantId })
+        });
+    }
+
+    async getChatDetail(chatId) {
+        return this.baseService.request(`${this.endpoint}/${chatId}/`);
+    }
+    
+
+}
+
+class GroupChatService{
+    constructor(baseService){
+        this.baseService = baseService;
+        this.endpoint = '/chat/groups';
+    }
+
+    async getGroupList() {
+        return this.baseService.request(`${this.endpoint}/`);
+    }
+
+    async createGroup(groupData) {
+        return this.baseService.request(`${this.endpoint}/create/`, {
+            method: 'POST',
+            body: JSON.stringify({
+                name: groupData.name,
+                description: groupData.description || '',
+                member_ids: groupData.memberIds || []
+            })
+        });
+    }
+
+    async getGroupDetail(groupId) {
+        return this.baseService.request(`${this.endpoint}/${groupId}/`);
+    }
+
+    async addMember(groupId, userId) {
+        return this.baseService.request(`${this.endpoint}/${groupId}/members/add/`, {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId })
+        });
+    }
+
+    async removeMember(groupId, userId) {
+        return this.baseService.request(`${this.endpoint}/${groupId}/members/remove/`, {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId })
+        });
+    }
+
+}
+
+
+
+class GeneralService {
+    constructor(baseService) {
+        this.baseService = baseService;
+        this.endpoint = '/generic';
+    }
+
+    async getFileWithProgress(filePath, onProgress = () => {}) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.responseType = 'blob';
+    
+            // Track download progress
+            xhr.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const progress = Math.round((event.loaded / event.total) * 100);
+                    onProgress(progress);
+                }
+            });
+    
+            xhr.addEventListener('load', async () => {
+                if (xhr.status === 200) {
+                    const blob = xhr.response;
+                    let fileName = filePath.split('/').pop() || 'download';
+                    
+                    // Try to get additional metadata from server
+                    try {
+                        const metadataResponse = await fetch(`${this.baseService.baseURL}${this.endpoint}/files/metadata/${filePath}`, {
+                            headers: this.baseService.getAuthHeader()
+                        });
+                        
+                        if (metadataResponse.ok) {
+                            const metadataJson = await metadataResponse.json();
+                            
+                            // Use server-provided metadata
+                            const metadata = {
+                                fileName: metadataJson.fileName || fileName,
+                                contentType: metadataJson.contentType || blob.type,
+                                fileSize: metadataJson.fileSize || blob.size,
+                                createdAt: metadataJson.createdAt || null,
+                                modifiedAt: metadataJson.modifiedAt || null,
+                            };
+    
+                            resolve({
+                                blob,
+                                fileName: metadata.fileName,
+                                metadata,
+                                download: () => this.downloadBlob(blob, metadata.fileName),
+                                getUrl: () => window.URL.createObjectURL(blob)
+                            });
+                        } else {
+                            // Fallback to basic metadata if metadata endpoint fails
+                            fallbackResolve(blob, fileName);
+                        }
+                    } catch (error) {
+                        // Fallback to basic metadata if metadata request fails
+                        console.warn('Failed to fetch metadata, using fallback:', error);
+                        fallbackResolve(blob, fileName);
+                    }
+    
+                } else {
+                    let errorMessage = 'Download failed';
+                    try {
+                        const response = JSON.parse(xhr.response);
+                        errorMessage = response.error || response.message || errorMessage;
+                    } catch (e) {
+                        // If response cannot be parsed, use default error message
+                    }
+                    reject(this.baseService.formatResponse(false, null, errorMessage, 'Download failed'));
+                }
+            });
+    
+            xhr.addEventListener('error', () => {
+                reject(this.baseService.formatResponse(false, null, 'Download failed', 'Network error'));
+            });
+    
+            // Helper function for fallback metadata
+            const fallbackResolve = (blob, fileName) => {
+                const metadata = {
+                    fileName: fileName,
+                    contentType: blob.type,
+                    fileSize: blob.size,
+                    createdAt: null,
+                    modifiedAt: null,
+                };
+    
+                resolve({
+                    blob,
+                    fileName,
+                    metadata,
+                    download: () => this.downloadBlob(blob, fileName),
+                    getUrl: () => window.URL.createObjectURL(blob)
+                });
+            };
+    
+            // Open and send the request
+            xhr.open('GET', `${this.baseService.baseURL}${this.endpoint}/files/${filePath}`);
+            
+            // Add authorization header
+            const authHeader = this.baseService.getAuthHeader();
+            if (authHeader.Authorization) {
+                xhr.setRequestHeader('Authorization', authHeader.Authorization);
+            }
+    
+            xhr.send();
+        });
+    }
+
+
+    async uploadFileWithProgress(file, onProgress = () => {}) {
+        return new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const xhr = new XMLHttpRequest();
+
+            // Track upload progress
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const progress = Math.round((event.loaded / event.total) * 100);
+                    onProgress(progress);
+                }
+            });
+
+            const fileTypeMapping = {
+                image: 'IMAGE',
+                video: 'VIDEO',
+                audio: 'AUDIO',
+                application: 'DOCUMENT', // Common MIME type for documents (e.g., PDFs)
+            };
+
+            xhr.addEventListener('load', () => {
+                try {
+                    const response = JSON.parse(xhr.response);
+                    if (xhr.status === 201) {
+                        // Return the response data in the same format as your API
+                        resolve({
+                            message: response.message || 'File uploaded successfully',
+                            path: response.file_path,
+                            file_type: response.file_type,
+                            type: fileTypeMapping[response.file_type.split('/')[0]] || 'UNKNOWN',
+                            name:response.metadata.filename,
+                            size:response.metadata.file_size,
+                            metadata: response.metadata
+                        });
+                    } else {
+                        reject({
+                            error: response.error || 'Upload failed',
+                            message: response.message || 'Upload failed',
+                            status: xhr.status
+                        });
+                    }
+                } catch (error) {
+                    reject({
+                        error: 'Failed to parse response',
+                        message: 'Upload failed',
+                        status: xhr.status
+                    });
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                reject({
+                    error: 'Network error',
+                    message: 'Upload failed',
+                    status: 0
+                });
+            });
+
+            xhr.addEventListener('abort', () => {
+                reject({
+                    error: 'Upload cancelled',
+                    message: 'Upload was cancelled',
+                    status: 0
+                });
+            });
+
+            // Open and send the request
+            xhr.open('POST', `${this.baseService.baseURL}${this.endpoint}/upload/`);
+            
+            // Add authorization header
+            const authHeader = this.baseService.getAuthHeader();
+            if (authHeader.Authorization) {
+                xhr.setRequestHeader('Authorization', authHeader.Authorization);
+            }
+
+            xhr.send(formData);
+        });
+    }
+
+
+ 
+}
+    
+
+  
+   
 
 
 const api = new BaseService();

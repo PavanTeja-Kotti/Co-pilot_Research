@@ -1,0 +1,8 @@
+pip install uvicorn
+pip install websockets
+pip install httptools
+pip install uvloop
+pip install wsproto
+
+
+uvicorn ReSearch.asgi:application --reload
