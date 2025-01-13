@@ -165,6 +165,10 @@ class BaseService {
     categories() {
         return new CategoryService(this);
     }
+
+    notifications() {
+        return new NotificationService(this);
+    }
 }
 
 class AccountsService {
@@ -469,6 +473,65 @@ class CategoryService extends ScrapingService {
 
 
    
+}
+
+
+class NotificationService extends AccountsService {
+
+    async getNotifications() {
+        return this.baseService.request(`${this.endpoint}/notifications/`);
+    }
+
+    async markNotificationAsRead(notificationId) {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/notifications/${notificationId}/mark/`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ 'action':'read' })
+                }
+
+
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Mark notification as read request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Mark notification as read failed',
+                error.message
+            );
+        }
+    }
+
+    async markAllNotificationsAsRead() {
+        try {
+            const response = await this.baseService.request(
+                `${this.endpoint}/notifications/mark-all/`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ 'action':'read' })
+                }
+            );
+            
+            return response;
+        } catch (error) {
+            console.error('Mark all notifications as read request failed:', error);
+            return this.baseService.formatResponse(
+                false,
+                null,
+                'Mark all notifications as read failed',
+                error.message
+            );
+        }
+    }
+
+    
+
+   
+
 }
 
 

@@ -1,15 +1,47 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from .models import Notification, NotificationType
 
 User = get_user_model()
 
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = (
+            'id', 'title', 'message', 'notification_type', 'is_read',
+            'created_at', 'updated_at', 'read_at'
+        )
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'read_at'
+        )
+
+class NotificationDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = (
+            'id', 'user', 'title', 'message', 'notification_type',
+            'is_read', 'created_at', 'updated_at', 'read_at', 'deleted_at'
+        )
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'read_at', 'deleted_at'
+        )
+
 class UserSerializer(serializers.ModelSerializer):
+    unread_notifications_count = serializers.SerializerMethodField()
+    notifications = NotificationSerializer(many=True, read_only=True)
+
     class Meta:
         model = User
-        fields = ('id', 'email', 'username', 'first_name', 'last_name', 
-                 'profile_image', 'bio', 'first_login', 'last_login_at' ,)
+        fields = (
+            'id', 'email', 'username', 'first_name', 'last_name',
+            'profile_image', 'bio', 'first_login', 'last_login_at',
+            'unread_notifications_count', 'notifications'
+        )
         read_only_fields = ('id', 'first_login', 'last_login_at')
+
+    def get_unread_notifications_count(self, obj):
+        return obj.get_unread_notifications_count()
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
@@ -17,8 +49,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'username', 'password', 'password_confirm', 
-                 'first_name', 'last_name', 'profile_image', 'bio')
+        fields = (
+            'id', 'email', 'username', 'password', 'password_confirm',
+            'first_name', 'last_name', 'profile_image', 'bio'
+        )
         read_only_fields = ('id',)
 
     def validate(self, data):
@@ -61,12 +95,44 @@ class UpdateUserSerializer(serializers.ModelSerializer):
         return value
 
 class AdminUpdateUserSerializer(serializers.ModelSerializer):
+    notifications = NotificationSerializer(many=True, read_only=True)
+
     class Meta:
         model = User
-        fields = ('email', 'first_name', 'last_name', 'profile_image', 'bio', 
-                 'is_active', 'is_staff', 'username', 'first_login', 'last_login_at')
+        fields = (
+            'email', 'first_name', 'last_name', 'profile_image', 'bio',
+            'is_active', 'is_staff', 'username', 'first_login', 'last_login_at',
+            'notifications'
+        )
         read_only_fields = ('last_login_at', 'first_login')
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField()
+
+class CreateNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ('user', 'title', 'message', 'notification_type')
+
+    def validate_notification_type(self, value):
+        if value not in NotificationType.values:
+            raise ValidationError(f"Invalid notification type. Must be one of: {', '.join(NotificationType.values)}")
+        return value
+
+class UpdateNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ('title', 'message', 'notification_type', 'is_read')
+        read_only_fields = ('is_read',)
+
+    def validate_notification_type(self, value):
+        if value not in NotificationType.values:
+            raise ValidationError(f"Invalid notification type. Must be one of: {', '.join(NotificationType.values)}")
+        return value
+
+class NotificationListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ('id', 'title', 'message', 'notification_type', 'is_read', 'created_at')
+        read_only_fields = fields

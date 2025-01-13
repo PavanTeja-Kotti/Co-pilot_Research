@@ -13,4 +13,15 @@ urlpatterns = [
     path('auth-status/', views.check_auth_status, name='auth-status'),
     path('users/', views.user_management, name='user-management'),
     path('users/<int:user_id>/', views.user_detail, name='user-detail'),
+
+
+    path('notifications/', views.user_notifications, name='user-notifications'),
+    path('notifications/mark-all/', views.mark_all_notifications, name='mark-all-notifications'),
+    path('notifications/<int:notification_id>/mark/', views.mark_notification, name='mark-notification'),
+    path('notifications/<int:notification_id>/delete/', views.delete_notification, name='delete-notification'),
+    path('notifications/<int:notification_id>/restore/', views.restore_notification, name='restore-notification'),
+
+    # Admin notification endpoints
+    path('admin/notifications/', views.admin_notifications, name='admin-notifications'),
+    path('admin/notifications/<int:notification_id>/', views.admin_notification_detail, name='admin-notification-detail'),
 ]

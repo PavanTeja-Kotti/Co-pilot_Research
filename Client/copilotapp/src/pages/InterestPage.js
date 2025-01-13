@@ -124,7 +124,7 @@ const ResearchInterests = ({
     setLocalSelectedInterests(newSelection);
 
     if (!showSubmitButton) {
-      onUpdateInterests(newSelection);
+      onUpdateInterests([interestId]);
     }
   };
 
@@ -348,7 +348,9 @@ const InterestPage = () => {
         </div>
 
         <ResearchInterests
-          selectedInterests={user.interests || []}
+          selectedInterests={ user?.category_like_list
+            ?.filter(item => item?.id)
+            ?.map(item => item.id) || []}
           onUpdateInterests={async (interests) => {
             setLoading(true);
             try {
@@ -362,6 +364,7 @@ const InterestPage = () => {
             }
           }}
           loading={loading}
+          
         />
       </Content>
     </Layout>

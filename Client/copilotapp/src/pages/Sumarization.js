@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { List, Card, Typography, Tag, Spin, message } from "antd";
-import axios from "axios";
+import PdfViewer from "../components/common/PdfViewer";
 
 const { Title, Text } = Typography;
 
@@ -12,7 +12,7 @@ const mockData = [
     authors: ["John Doe", "Jane Smith"],
     source: "ScienceDirect",
     url: "https://sciencedirect.com/ai-healthcare",
-    pdf_url: "https://sciencedirect.com/pdf/ai-healthcare.pdf",
+    pdf_url: "https://morth.nic.in/sites/default/files/dd12-13_0.pdf",
     categories: ["AI", "Healthcare"],
     publication_date: "2024-01-15",
     created_at: "2024-01-16T12:00:00Z",
@@ -24,7 +24,7 @@ const mockData = [
     authors: ["Alice Johnson", "Bob Lee"],
     source: "IEEE",
     url: "https://ieee.org/quantum-computing",
-    pdf_url: "https://ieee.org/pdf/quantum-computing.pdf",
+    pdf_url: "https://morth.nic.in/sites/default/files/dd12-13_0.pdf",
     categories: ["Quantum Computing", "Technology"],
     publication_date: "2024-02-01",
     created_at: "2024-02-02T15:00:00Z",
@@ -34,34 +34,9 @@ const mockData = [
 const Sumarization = () => {
   const [expandedCardId, setExpandedCardId] = useState(null);
   const [loadingCardId, setLoadingCardId] = useState(null);
-  const [summaries, setSummaries] = useState({});
 
-  const handleTitleClick = async (id, pdfUrl) => {
-    setLoadingCardId(id);
-    setExpandedCardId(null); // Close any previously expanded card
-
-    // try {
-    //   const response = await axios.post(
-    //     "http://your-backend-url/summarization/",
-    //     { pdf_url: pdfUrl },
-    //     {
-    //       headers: {
-    //         Authorization: `Bearer ${yourAccessToken}`, // Replace with your JWT token
-    //       },
-    //     }
-    //   );
-
-    //   setSummaries((prevSummaries) => ({
-    //     ...prevSummaries,
-    //     [id]: response.data.summary,
-    //   }));
-    //   setExpandedCardId(id); // Expand the card
-    //   message.success("Summary fetched successfully!");
-    // } catch (error) {
-    //   message.error("Failed to fetch summary. Please try again.");
-    // } finally {
-    //   setLoadingCardId(null);
-    // }
+  const handleTitleClick = async (id) => {
+    setExpandedCardId((prevId) => (prevId === id ? null : id));
   };
 
   return (
@@ -82,25 +57,16 @@ const Sumarization = () => {
                   <Spin size="small" />
                 ) : (
                   <span
-                    onClick={() => handleTitleClick(paper.id, paper.pdf_url)}
+                    onClick={() => handleTitleClick(paper.id)}
                     style={{ cursor: "pointer", color: "#1890ff" }}
                   >
-                    {expandedCardId === paper.id ? "Hide Summary" : "Show Summary"}
+                    {expandedCardId === paper.id ? "Hide PDF" : "Show PDF"}
                   </span>
                 ),
               ]}
             >
               <Title level={4} style={{ marginBottom: "8px" }}>
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleTitleClick(paper.id, paper.pdf_url);
-                  }}
-                  style={{ textDecoration: "none", color: "#007BFF" }}
-                >
-                  {paper.title}
-                </a>
+                {paper.title}
               </Title>
               <Text type="secondary" style={{ display: "block", marginBottom: "8px" }}>
                 {paper.abstract}
@@ -116,7 +82,7 @@ const Sumarization = () => {
                   </Tag>
                 ))}
               </div>
-              {expandedCardId === paper.id && summaries[paper.id] && (
+              {expandedCardId === paper.id && (
                 <div
                   style={{
                     marginTop: "16px",
@@ -127,10 +93,7 @@ const Sumarization = () => {
                     transition: "max-height 0.3s ease",
                   }}
                 >
-                  <Title level={5} style={{ marginBottom: "8px" }}>
-                    Summary
-                  </Title>
-                  <Text>{summaries[paper.id]}</Text>
+                  <PdfViewer pdfUrl={paper.pdf_url} />
                 </div>
               )}
             </Card>
