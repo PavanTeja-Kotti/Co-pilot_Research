@@ -640,43 +640,23 @@ class GeneralService {
             xhr.addEventListener('load', async () => {
                 if (xhr.status === 200) {
                     const blob = xhr.response;
-                    let fileName = filePath.split('/').pop() || 'download';
+                    const fileName = filePath.split('/').pop() || 'download';
                     
-                    // Try to get additional metadata from server
-                    try {
-                        const metadataResponse = await fetch(`${this.baseService.baseURL}${this.endpoint}/files/metadata/${filePath}`, {
-                            headers: this.baseService.getAuthHeader()
-                        });
-                        
-                        if (metadataResponse.ok) {
-                            const metadataJson = await metadataResponse.json();
-                            
-                            // Use server-provided metadata
-                            const metadata = {
-                                fileName: metadataJson.fileName || fileName,
-                                contentType: metadataJson.contentType || blob.type,
-                                fileSize: metadataJson.fileSize || blob.size,
-                                createdAt: metadataJson.createdAt || null,
-                                modifiedAt: metadataJson.modifiedAt || null,
-                            };
+                    const metadata = {
+                        fileName: fileName,
+                        contentType: blob.type,
+                        fileSize: blob.size,
+                        createdAt: null,
+                        modifiedAt: null,
+                    };
     
-                            resolve({
-                                blob,
-                                fileName: metadata.fileName,
-                                metadata,
-                                download: () => this.downloadBlob(blob, metadata.fileName),
-                                getUrl: () => window.URL.createObjectURL(blob)
-                            });
-                        } else {
-                            // Fallback to basic metadata if metadata endpoint fails
-                            fallbackResolve(blob, fileName);
-                        }
-                    } catch (error) {
-                        // Fallback to basic metadata if metadata request fails
-                        console.warn('Failed to fetch metadata, using fallback:', error);
-                        fallbackResolve(blob, fileName);
-                    }
-    
+                    resolve({
+                        blob,
+                        fileName,
+                        metadata,
+                        download: () => this.downloadBlob(blob, fileName),
+                        getUrl: () => window.URL.createObjectURL(blob)
+                    });
                 } else {
                     let errorMessage = 'Download failed';
                     try {
@@ -692,25 +672,6 @@ class GeneralService {
             xhr.addEventListener('error', () => {
                 reject(this.baseService.formatResponse(false, null, 'Download failed', 'Network error'));
             });
-    
-            // Helper function for fallback metadata
-            const fallbackResolve = (blob, fileName) => {
-                const metadata = {
-                    fileName: fileName,
-                    contentType: blob.type,
-                    fileSize: blob.size,
-                    createdAt: null,
-                    modifiedAt: null,
-                };
-    
-                resolve({
-                    blob,
-                    fileName,
-                    metadata,
-                    download: () => this.downloadBlob(blob, fileName),
-                    getUrl: () => window.URL.createObjectURL(blob)
-                });
-            };
     
             // Open and send the request
             xhr.open('GET', `${this.baseService.baseURL}${this.endpoint}/files/${filePath}`);

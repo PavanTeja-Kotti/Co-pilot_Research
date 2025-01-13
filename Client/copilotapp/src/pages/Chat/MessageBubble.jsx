@@ -3,368 +3,584 @@ import { Typography, Progress, Modal } from 'antd';
 import { 
   DownloadOutlined,
   ExpandOutlined,
-  CloseCircleOutlined,
-  FileImageOutlined
+  FileImageOutlined,
+  FilePdfOutlined,
+  FileTextOutlined,
+  FileExcelOutlined,
+  FileWordOutlined,
+  VideoCameraOutlined,
+  FileUnknownOutlined,
+  EyeOutlined,
+  LoadingOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../utils/auth';
 
 const { Text } = Typography;
 
-// Custom hook for handling intersection observer
+// Global file cache
+const fileCache = new Map();
+
+// Custom hook for intersection observer
 const useIntersectionObserver = (options = {}) => {
   const [isVisible, setIsVisible] = useState(false);
   const elementRef = useRef(null);
   const observerRef = useRef(null);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
+    if (observerRef.current) return; // Only create observer once
+
+    observerRef.current = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         setIsVisible(true);
-        // Once visible, stop observing
-        if (elementRef.current) {
-          observer.unobserve(elementRef.current);
-        }
+        // Once visible, disconnect observer
+        observerRef.current?.disconnect();
       }
     }, {
-      root: options.root || null,
-      rootMargin: options.rootMargin || '50px',
-      threshold: options.threshold || 0
+      threshold: 0.1,
+      rootMargin: '50px',
+      ...options
     });
 
-    observerRef.current = observer;
-
-    return () => {
-      if (observer && elementRef.current) {
-        observer.disconnect();
-      }
-    };
-  }, [options.root, options.rootMargin, options.threshold]);
-
-  useEffect(() => {
-    const currentElement = elementRef.current;
-    const currentObserver = observerRef.current;
-
-    if (currentElement && currentObserver) {
-      currentObserver.observe(currentElement);
+    if (elementRef.current) {
+      observerRef.current.observe(elementRef.current);
     }
 
     return () => {
-      if (currentElement && currentObserver) {
-        currentObserver.unobserve(currentElement);
-      }
+      observerRef.current?.disconnect();
     };
-  }, [elementRef.current]);
+  }, []); // Empty dependency array - only run once
 
   return [elementRef, isVisible];
 };
 
-// Image Modal Component
-const ImageModal = ({ visible, imageUrl, onClose }) => (
-  <Modal
-    open={visible}
-    footer={null}
-    onCancel={onClose}
-    width="auto"
-    centered
-    styles={{
-      content: {
-        maxWidth: '90vw',
-        maxHeight: '90vh',
-        padding: 0,
-        backgroundColor: 'transparent',
-      },
-      body: {
-        padding: 0,
-      },
-      mask: {
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-      }
-    }}
-  >
-    <img
-      src={imageUrl}
-      alt="Full size"
-      style={{
-        maxWidth: '90vw',
-        maxHeight: '90vh',
-        objectFit: 'contain'
-      }}
-    />
-  </Modal>
-);
+// File type configurations
+const FILE_TYPES = {
+  IMAGE: {
+    extensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'],
+    icon: FileImageOutlined,
+    preview: true,
+    contentType: 'image'
+  },
+  VIDEO: {
+    extensions: ['.mp4', '.webm', '.mov', '.avi', '.mkv'],
+    icon: VideoCameraOutlined,
+    preview: true,
+    contentType: 'video'
+  },
+  PDF: {
+    extensions: ['.pdf'],
+    icon: FilePdfOutlined,
+    preview: true,
+    contentType: 'pdf'
+  },
+  WORD: {
+    extensions: ['.doc', '.docx'],
+    icon: FileWordOutlined,
+    preview: false
+  },
+  EXCEL: {
+    extensions: ['.xls', '.xlsx', '.csv'],
+    icon: FileExcelOutlined,
+    preview: false
+  },
+  TEXT: {
+    extensions: ['.txt', '.rtf', '.md'],
+    icon: FileTextOutlined,
+    preview: true,
+    contentType: 'text'
+  },
+  DEFAULT: {
+    extensions: [],
+    icon: FileUnknownOutlined,
+    preview: false
+  }
+};
 
-// Lazy Loading Image Component
-const LazyImage = ({ attachment, onLoad, onError, isOwnMessage }) => {
-  const [ref, isVisible] = useIntersectionObserver({
-    rootMargin: '50px',
-    threshold: 0.1
-  });
-  const [hasLoaded, setHasLoaded] = useState(false);
+// Get file type from extension
+const getFileType = (fileName) => {
+  const extension = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
+  return Object.entries(FILE_TYPES).find(([_, config]) => 
+    config.extensions.includes(extension)
+  )?.[0] || 'DEFAULT';
+};
+
+// Preview Modal Component
+const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
+  const [pdfPages, setPdfPages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (isVisible && !hasLoaded) {
-      setHasLoaded(true);
+    if (fileType === 'PDF' && visible && fileUrl) {
+      loadPdfPreview();
     }
-  }, [isVisible, hasLoaded]);
+  }, [fileUrl, visible, fileType]);
+
+  const loadPdfPreview = async () => {
+    if (!fileUrl) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+      
+      const loadingTask = pdfjsLib.getDocument(fileUrl);
+      const pdf = await loadingTask.promise;
+      const totalPages = pdf.numPages;
+      const pagesPromises = [];
+      
+      for (let i = 1; i <= Math.min(totalPages, 3); i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        pagesPromises.push(canvas.toDataURL());
+      }
+      
+      setPdfPages(await Promise.all(pagesPromises));
+    } catch (error) {
+      console.error('Error loading PDF:', error);
+      setError('Failed to load PDF preview');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderPreview = () => {
+    switch (fileType) {
+      case 'IMAGE':
+        return (
+          <img
+            src={fileUrl}
+            alt={fileName}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              objectFit: 'contain'
+            }}
+          />
+        );
+      case 'VIDEO':
+        return (
+          <video
+            src={fileUrl}
+            controls
+            autoPlay={false}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '90vh'
+            }}
+          />
+        );
+      case 'PDF':
+        return (
+          <div style={{ 
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            backgroundColor: '#f0f0f0',
+            padding: '20px'
+          }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <LoadingOutlined style={{ fontSize: 24 }} />
+                <p>Loading PDF preview...</p>
+              </div>
+            ) : error ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#ff4d4f' }}>
+                {error}
+              </div>
+            ) : (
+              pdfPages.map((pageUrl, index) => (
+                <img
+                  key={index}
+                  src={pageUrl}
+                  alt={`Page ${index + 1}`}
+                  style={{
+                    width: '100%',
+                    marginBottom: '20px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                  }}
+                />
+              ))
+            )}
+          </div>
+        );
+      case 'TEXT':
+        return (
+          <div style={{
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            padding: '20px',
+            backgroundColor: '#fff',
+            overflowY: 'auto'
+          }}>
+            <pre style={{ 
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontFamily: 'monospace'
+            }}>
+              {fileUrl}
+            </pre>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Modal
+      open={visible}
+      footer={null}
+      onCancel={onClose}
+      width="auto"
+      centered
+      styles={{
+        content: {
+          maxWidth: '95vw',
+          maxHeight: '95vh',
+          padding: 0,
+          backgroundColor: 'transparent',
+        },
+        body: {
+          padding: 0,
+        },
+        mask: {
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        }
+      }}
+      title={fileName}
+    >
+      {renderPreview()}
+    </Modal>
+  );
+};
+
+// Lazy Loading Preview Component
+const LazyPreviewLoader = ({ attachment, onLoad, isOwnMessage }) => {
+  const [ref, isVisible] = useIntersectionObserver();
+  const hasTriggeredLoad = useRef(false);
+  const fileType = getFileType(attachment.file_name);
+  const FileIcon = FILE_TYPES[fileType].icon;
+
+  useEffect(() => {
+    if (isVisible && !hasTriggeredLoad.current) {
+      hasTriggeredLoad.current = true;
+      onLoad();
+    }
+  }, [isVisible, onLoad]);
 
   return (
     <div 
       ref={ref}
       style={{
-        width: '180px',
-        height: '120px',
+        width: '100%',
+        height: '160px',
         backgroundColor: isOwnMessage ? 'rgba(22,119,255,0.1)' : 'rgba(255,255,255,0.05)',
-        borderRadius: '8px',
-        overflow: 'hidden',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}
     >
-      {hasLoaded ? (
-        onLoad({ attachment })
-      ) : (
-        <FileImageOutlined 
-          style={{ 
-            fontSize: 24, 
-            opacity: 0.5,
-            color: isOwnMessage ? '#fff' : '#1677ff'
-          }} 
+      {!hasTriggeredLoad.current && (
+        <FileIcon style={{ 
+          fontSize: 32,
+          opacity: 0.5,
+          color: isOwnMessage ? '#1677ff' : '#8c8c8c'
+        }} />
+      )}
+    </div>
+  );
+};
+
+// File Preview Component
+const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { downloadFile } = useAuth();
+  
+  const fileType = getFileType(attachment.file_name);
+  const FileIcon = FILE_TYPES[fileType].icon;
+  const canPreview = FILE_TYPES[fileType].preview;
+  const contentType = FILE_TYPES[fileType].contentType;
+
+  const loadPreview = useCallback(async () => {
+    if (!canPreview || fileCache.has(attachment.file_path)) {
+      if (fileCache.has(attachment.file_path)) {
+        setPreviewUrl(fileCache.get(attachment.file_path));
+      }
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const fileData = await downloadFile(attachment.file_path);
+      
+      if (fileData?.blob) {
+        if (contentType === 'text') {
+          const text = await fileData.blob.text();
+          setPreviewUrl(text);
+          fileCache.set(attachment.file_path, text);
+        } else {
+          const url = URL.createObjectURL(fileData.blob);
+          setPreviewUrl(url);
+          fileCache.set(attachment.file_path, url);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load preview:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [attachment, canPreview, contentType, downloadFile]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && !fileCache.has(attachment.file_path) && contentType !== 'text') {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl, attachment, contentType]);
+
+  const handlePreviewClick = async () => {
+    if (!previewUrl) {
+      await loadPreview();
+    }
+    setModalVisible(true);
+  };
+
+  return (
+    <div 
+      className="file-preview"
+      onMouseEnter={() => setShowOverlay(true)}
+      onMouseLeave={() => setShowOverlay(false)}
+      style={{
+        width: '240px',
+        backgroundColor: isOwnMessage ? 'rgba(22,119,255,0.1)' : 'rgba(255,255,255,0.05)',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        position: 'relative',
+        marginBottom: '8px'
+      }}
+    >
+      {/* File Info Section */}
+      <div style={{
+        padding: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <FileIcon style={{ 
+          fontSize: 24,
+          color: isOwnMessage ? '#1677ff' : '#8c8c8c'
+        }} />
+        <div style={{
+          flex: 1,
+          overflow: 'hidden'
+        }}>
+          <Text
+            style={{
+              color: isOwnMessage ? '#1677ff' : '#000000',
+              display: 'block',
+              fontSize: '14px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+          >
+            {attachment.file_name}
+          </Text>
+          <Text
+            style={{
+              color: '#8c8c8c',
+              fontSize: '12px'
+            }}
+          >
+            {(attachment.file_size / 1024).toFixed(1)} KB
+          </Text>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Preview Button */}
+          {canPreview && (
+            <div 
+              onClick={handlePreviewClick}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                backgroundColor: isOwnMessage ? '#1677ff20' : '#f0f0f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              {isLoading ? (
+                <LoadingOutlined style={{ 
+                  color: isOwnMessage ? '#1677ff' : '#8c8c8c',
+                  fontSize: 16 
+                }} />
+              ) : (
+                <EyeOutlined style={{ 
+                  color: isOwnMessage ? '#1677ff' : '#8c8c8c',
+                  fontSize: 16 
+                }} />
+              )}
+            </div>
+          )}
+          
+          {/* Download Button */}
+          <div 
+            onClick={onDownload}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: isOwnMessage ? '#1677ff' : '#f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            <DownloadOutlined style={{ 
+              color: isOwnMessage ? '#ffffff' : '#1677ff',
+              fontSize: 16 
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Preview Section */}
+      {canPreview && (
+        <>
+          {!previewUrl ? (
+            <LazyPreviewLoader
+              attachment={attachment}
+              onLoad={loadPreview}
+              isOwnMessage={isOwnMessage}
+            />
+          ) : (contentType === 'image' || contentType === 'video') && (
+            <div style={{
+              width: '100%',
+              height: '160px',
+              backgroundColor: '#000000',
+              position: 'relative'
+            }}>
+              {contentType === 'image' ? (
+                <img
+                  src={previewUrl}
+                  alt={attachment.file_name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
+                  onClick={handlePreviewClick}
+                />
+              ) : (
+                <video
+                  src={previewUrl}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
+                  controls
+                  preload="metadata"
+                />
+              )}
+              {contentType === 'image' && showOverlay && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <ExpandOutlined 
+                    onClick={handlePreviewClick}
+                    style={{ 
+                      color: '#fff',
+                      fontSize: 24,
+                      cursor: 'pointer'
+                    }} 
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Preview Modal */}
+      {modalVisible && (
+        <PreviewModal
+          visible={modalVisible}
+          fileUrl={previewUrl}
+          fileType={fileType}
+          fileName={attachment.file_name}
+          onClose={() => setModalVisible(false)}
         />
       )}
     </div>
   );
 };
 
-// Main Message Bubble Component
+// MessageBubble Component
 const MessageBubble = ({ message, type = 'private' }) => {
   const { user, downloadFile } = useAuth();
-  const [downloading, setDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [imageError, setImageError] = useState(false);
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-
   const sender = message.sender;
   const isOwnMessage = sender?.id === user?.id;
 
-  // Cleanup URLs on unmount
-  useEffect(() => {
-    return () => {
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-      }
-    };
-  }, [imageUrl]);
-
-  // Download handler
-  const handleDownload = async (attachment, e) => {
-    e.stopPropagation();
-    if (downloading) return;
+  const handleDownload = useCallback(async (attachment, e) => {
+    if (e) e.stopPropagation();
     
     try {
-      setDownloading(true);
-      setDownloadProgress(0);
+      const fileData = await downloadFile(attachment.file_path);
 
-      const fileData = await downloadFile(
-        attachment.file_path,
-        (progress) => setDownloadProgress(progress)
-      );
-
-      const url = URL.createObjectURL(fileData.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', fileData.fileName || attachment.file_name);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-
-      setDownloadProgress(100);
-      setTimeout(() => {
-        setDownloading(false);
-        setDownloadProgress(0);
-      }, 1000);
-
-    } catch (error) {
-      console.error('Download failed:', error);
-      setDownloading(false);
-      setDownloadProgress(0);
-    }
-  };
-
-  // Fullscreen handler
-  const handleFullscreen = (e) => {
-    e.stopPropagation();
-    setModalVisible(true);
-  };
-
-  // Load image handler
-  const loadImage = useCallback(async (attachment) => {
-    if (imageUrl) return;
-
-    try {
-      setDownloading(true);
-      const fileData = await downloadFile(
-        attachment.file_path,
-        (progress) => setDownloadProgress(progress)
-      );
-      
-      if (fileData?.blob instanceof Blob) {
+      if (fileData?.blob) {
         const url = URL.createObjectURL(fileData.blob);
-        setImageUrl(url);
-        setImageError(false);
-      } else {
-        setImageError(true);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', attachment.file_name);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
       }
     } catch (error) {
-      console.error('Failed to load image:', error);
-      setImageError(true);
-    } finally {
-      setDownloading(false);
-      setDownloadProgress(0);
+      console.error('Download failed:', error);
     }
-  }, [downloadFile, imageUrl]);
+  }, [downloadFile]);
 
-  // Render image content
-  const renderImageContent = useCallback(({ attachment }) => {
-    if (!imageUrl && !imageError) {
-      loadImage(attachment);
-    }
-
-    return (
-      <div 
-        style={{ 
-          width: '100%',
-          height: '100%',
-          position: 'relative'
-        }}
-        onMouseEnter={() => setShowOverlay(true)}
-        onMouseLeave={() => setShowOverlay(false)}
-      >
-        {!imageError && imageUrl ? (
-          <>
-            <img 
-              src={imageUrl}
-              alt={attachment.file_name}
-              onError={() => setImageError(true)}
-              onLoad={() => setImageLoaded(true)}
-              style={{ 
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                backgroundColor: 'rgba(0,0,0,0.03)',
-                opacity: imageLoaded ? 1 : 0,
-                transition: 'opacity 0.3s ease'
-              }}
-            />
-            {showOverlay && (
-              <>
-                {/* Download button */}
-                <div 
-                  onClick={(e) => handleDownload(attachment, e)}
-                  style={{
-                    position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    zIndex: 2
-                  }}
-                >
-                  <DownloadOutlined style={{ color: '#ffffff', fontSize: 16 }} />
-                </div>
-                {/* Fullscreen button */}
-                <div 
-                  onClick={handleFullscreen}
-                  style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    width: 36,
-                    height: 36,
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    zIndex: 2
-                  }}
-                >
-                  <ExpandOutlined style={{ color: '#ffffff', fontSize: 20 }} />
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: isOwnMessage ? '#fff' : '#ff4d4f'
-          }}>
-            {imageError ? 'Failed to load image' : 'Loading image...'}
-          </div>
-        )}
-        {downloading && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 3
-          }}>
-            <Progress
-              type="circle"
-              percent={downloadProgress}
-              width={44}
-              strokeWidth={4}
-              strokeColor="#ffffff"
-              trailColor="rgba(255,255,255,0.3)"
-              format={() => ''}
-            />
-          </div>
-        )}
-      </div>
-    );
-  }, [imageUrl, imageError, imageLoaded, showOverlay, downloading, downloadProgress, handleDownload]);
-
-  // Render main content
   const renderContent = () => {
-    if (message.message_type === 'IMAGE' && message.attachments?.length > 0) {
-      const attachment = message.attachments[0];
-      return (
-        <>
-          <LazyImage 
-            attachment={attachment}
-            onLoad={renderImageContent}
-            onError={() => setImageError(true)}
-            isOwnMessage={isOwnMessage}
-          />
-          <ImageModal
-            visible={modalVisible}
-            imageUrl={imageUrl}
-            onClose={() => setModalVisible(false)}
-          />
-        </>
-      );
+    if (message.attachments?.length > 0) {
+      return message.attachments.map((attachment, index) => (
+        <FilePreview
+          key={`${attachment.file_path}-${index}`}
+          attachment={attachment}
+          isOwnMessage={isOwnMessage}
+          onDownload={(e) => handleDownload(attachment, e)}
+        />
+      ));
     }
 
     return (
@@ -401,7 +617,8 @@ const MessageBubble = ({ message, type = 'private' }) => {
       )}
       <div style={{ 
         maxWidth: '70%',
-        display: 'inline-block'
+        display: 'inline-block',
+        position: 'relative'
       }}>
         {renderContent()}
       </div>

@@ -10,6 +10,7 @@ import { useAuth } from './utils/auth';
 import PrivateRoute from './components/common/PrivateRoute';
 import {InterestPage} from './pages/InterestPage';
 import {chatapi} from './utils/socket';
+import Sumarization from './pages/Sumarization';
 
 const PublicRoute = ({ children }) => {
   const { user } = useAuth();
@@ -63,6 +64,7 @@ const App = () => {
           <Route path="/interest" element={<InterestPage />} />
           <Route path="/dashboard" element={<h1>sdsdeeee</h1>} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/summarization" element={<Sumarization />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
