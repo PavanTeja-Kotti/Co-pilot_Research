@@ -524,10 +524,11 @@ class ChatAPI {
         await this.ws.disconnect('group', groupId);
     }
 
-    async sendGroupMessage(groupId, text, messageType = 'TEXT') {
+    async sendGroupMessage(groupId, text, messageType = 'TEXT',content =null) {
         return this.ws.send('group', groupId, {
             text,
-            message_type: messageType
+            message_type: messageType,
+            file: content
         });
     }
 

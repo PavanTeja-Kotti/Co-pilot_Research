@@ -14,12 +14,16 @@ import {
   LoadingOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../utils/auth';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
+import 'pdfjs-dist/build/pdf.worker.entry';
 
 const { Text } = Typography;
 
 // Global file cache
 const fileCache = new Map();
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 // Custom hook for intersection observer
 const useIntersectionObserver = (options = {}) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -123,8 +127,12 @@ const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
       setLoading(true);
       setError(null);
       
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+      // Import both pdfjs library and worker
+      const pdfjsLib = await import('pdfjs-dist/build/pdf');
+      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.entry');
+      
+      // Set up the worker
+      pdfjsLib.GlobalWorkerOptions.workerPort = new pdfjsWorker.default();
       
       const loadingTask = pdfjsLib.getDocument(fileUrl);
       const pdf = await loadingTask.promise;

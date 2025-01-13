@@ -261,20 +261,22 @@ const Chat = ({ onclose }) => {
   };
 
   return (
-    <div style={styles.aiChatContainer}>
-      <div style={styles.aiChatHeader}>
+    // <div style={styles.aiChatContainer}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column',flex:1,backgroundColor: token.colorBgContainer ,}}>
+      {/* <div style={styles.aiChatHeader}>
         <Avatar style={{ backgroundColor: "#8B5CF6" }}>AI</Avatar>
         <div style={{ flex: 1 }}>
           <Text strong style={{ color: "#ffffff" }}>
             AI Assistant {!isConnected && "(Connecting...)"}
           </Text>
         </div>
+
         <Button
           type="text"
           onClick={onclose}
           icon={<CloseOutlined style={{ color: "#ffffff" }} />}
         />
-      </div>
+      </div> */}
 
       <div className="custom-scroll" style={styles.aiChatMessages}>
         <style>
@@ -401,4 +403,4 @@ const AIChat = () => {
   );
 };
 
-export default AIChat;
+export default Chat;

@@ -76,7 +76,7 @@ const ChatList = ({onClose, chats, onSelectChat, onCreateGroup }) => {
                   {chat.name}
                 </Text>
                 <Text style={{ color: '#8c8c8c', fontSize: 12 }}>
-                  {chat.lastMessage}
+                  {chat.lastMessage?chat.lastMessage.length>20?chat.lastMessage.subs    :"":'No messages'}
                 </Text>
               </div>
               <Text style={{ color: '#8c8c8c', fontSize: 12 }}>

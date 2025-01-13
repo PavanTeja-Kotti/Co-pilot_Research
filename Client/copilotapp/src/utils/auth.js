@@ -81,6 +81,8 @@ export const AuthProvider = ({ children }) => {
   const uploadFile = async (file, onProgress) => {
     try {
       const response = await api.general().uploadFileWithProgress(file, onProgress);
+
+      console.log("Uploaded file:", response);
       
       // Pre-cache the uploaded file if we have the data
       if (response.path && response.blob) {

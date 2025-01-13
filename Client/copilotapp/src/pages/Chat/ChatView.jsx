@@ -21,15 +21,16 @@ import {
 import MessageBubble from "./MessageBubble";
 import { chatapi, webSocket } from "../../utils/socket";
 import api from "../../utils/api";
+import { useAuth } from "../../utils/auth";
 
 const { useToken } = theme;
 const { Text } = Typography;
 const { TextArea } = Input;
 
 const ALLOWED_FILE_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
+  'image/*',
+  'video/*',
+  'video/mkv',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -50,6 +51,8 @@ const ChatView = ({
   onFileUpload,
   messagesEndRef,
 }) => {
+
+  const {uploadFile}=useAuth()
   const { token } = useToken();
   const scrollRef = useRef(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -144,15 +147,15 @@ const ChatView = ({
   };
 
   const handleFileUpload = async (file) => {
-    if (file.size > MAX_FILE_SIZE) {
-      antMessage.error('File size should not exceed 50MB');
-      return;
-    }
+    // if (file.size > MAX_FILE_SIZE) {
+    //   antMessage.error('File size should not exceed 50MB');
+    //   return;
+    // }
 
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      antMessage.error('File type not supported');
-      return;
-    }
+    // if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+    //   antMessage.error('File type not supported');
+    //   return;
+    // }
 
     const tempMessageId = `upload-${Date.now()}`;
     
@@ -163,7 +166,7 @@ const ChatView = ({
         status: 'uploading'
       }));
 
-      const result = await api.general().uploadFileWithProgress(file, (progress) => {
+      const result = await uploadFile(file, (progress) => {
         setUploadingFiles(prev => new Map(prev).set(tempMessageId, {
           file,
           progress,
@@ -179,7 +182,7 @@ const ChatView = ({
       }));
 
       if (chat.type === "group") {
-        await chatapi.sendGroupMessage(chat.id, null, result);
+        await chatapi.sendGroupMessage(chat.id, null, result.type, result);
       } else {
         await chatapi.sendChatMessage(chat.id, null, result.type, result);
       }
@@ -344,7 +347,7 @@ return (
           handleFileUpload(file);
           return false;
         }}
-        accept={ALLOWED_FILE_TYPES.join(',')}
+        // accept={ALLOWED_FILE_TYPES.join(',')}
       >
         <Button
           icon={<PaperClipOutlined />}

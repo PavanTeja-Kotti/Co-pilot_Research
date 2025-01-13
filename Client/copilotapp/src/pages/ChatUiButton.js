@@ -180,7 +180,6 @@ const ChatUI = () => {
     };
   }, [user.email]);
 
-  console.log('chat', chats);
 
   // WebSocket message handler
   const handleManagementMessage = useCallback((data) => {
@@ -343,7 +342,7 @@ const ChatUI = () => {
                     {chat.name}
                   </div>
                   <div style={{ color: '#999', fontSize: '12px' }}>
-                    {chat.lastMessage || 'No messages yet'}
+                    {chat.lastMessage? chat.lastMessage.length>20?chat.lastMessage.substring(0,20)+"...":chat.lastMessage  : 'No messages yet'}
                   </div>
                 </div>
                 <div style={{ color: '#999', fontSize: '12px' }}>

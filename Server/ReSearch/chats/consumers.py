@@ -603,7 +603,7 @@ class ChatConsumer(BaseChatConsumer):
             
             # Validate required fields based on message type
             message_type = data.get('message_type', MessageType.TEXT)
-            if not self.validate_message_data(message_type, data):
+            if not validate_message_data(message_type, data):
                 await self.send(json.dumps({
                     'type': 'error',
                     'message': 'Invalid message data'
@@ -635,43 +635,7 @@ class ChatConsumer(BaseChatConsumer):
                 'message': 'Internal server error'
             }))
 
-    def validate_message_data(self, message_type, data):
-        """Validate message data based on message type"""
-        try:
-            if message_type == MessageType.TEXT:
-                return bool(data.get('text'))
-                
-            elif message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
-                file_data = data.get('file', {})
-                return all([
-                    file_data.get('path'),
-                    file_data.get('name'),
-                    file_data.get('type')
-                ])
-                
-            elif message_type == MessageType.LOCATION:
-                return all([
-                    data.get('latitude') is not None,
-                    data.get('longitude') is not None
-                ])
-                
-            elif message_type == MessageType.CONTACT:
-                return all([
-                    data.get('contact_name'),
-                    data.get('contact_phone')
-                ])
-                
-            elif message_type == MessageType.STICKER:
-                return bool(data.get('sticker_id'))
-                
-            elif message_type == MessageType.SYSTEM:
-                return bool(data.get('action'))
-                
-            return False
-            
-        except Exception as e:
-            logger.error(f"Error validating message data: {str(e)}")
-            return False
+
 
     @database_sync_to_async
     def get_chat(self):
@@ -827,8 +791,17 @@ class GroupChatConsumer(BaseChatConsumer):
                     'message': 'You are no longer a member of this group'
                 }))
                 return
-                
+            
+            message_type = data.get('message_type', MessageType.TEXT)
+            if not validate_message_data(message_type, data):
+                await self.send(json.dumps({
+                    'type': 'error',
+                    'message': 'Invalid message data'
+                }))
+                return
+
             message = await self.save_message(data)
+            
             if message:
                 message_data = await self.get_message_data(message)
                 await self.channel_layer.group_send(
@@ -838,6 +811,7 @@ class GroupChatConsumer(BaseChatConsumer):
                         'message': message_data
                     }
                 )
+                
                 
         except json.JSONDecodeError:
             logger.error("Invalid JSON in group message")
@@ -878,16 +852,66 @@ class GroupChatConsumer(BaseChatConsumer):
 
 
             # Create the message
+            message_type = data.get('message_type', MessageType.TEXT)
+            content = data.get('content', {})
             message = Message.objects.create(
                 
                 sender=self.user,
                 group_chat_id=self.group_id,
                 text_content=data.get('text'),
-                content=data.get('content', {}),
+                content=content,
                 message_type=data.get('message_type', MessageType.TEXT)
             )
             
             # Create receipts for other active members
+
+            # Handle different message types
+            if message_type == MessageType.TEXT:
+                message.text_content = data.get('text')
+                
+            elif message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
+                # Handle file attachments
+                file_data = data.get('file', {})
+                if file_data:
+                    attachment = MessageAttachment.objects.create(
+                        file_path=file_data.get('path'),
+                        file_name=file_data.get('name'),
+                        file_size=file_data.get('size', 0),
+                        file_type=file_data.get('type')
+                    )
+                    message.save()  # Save message first to get ID
+                    message.attachments.add(attachment)
+
+            elif message_type == MessageType.LOCATION:
+                message.content = {
+                    'latitude': data.get('latitude'),
+                    'longitude': data.get('longitude'),
+                    'address': data.get('address', '')
+                }
+
+            elif message_type == MessageType.CONTACT:
+                message.content = {
+                    'name': data.get('contact_name'),
+                    'phone': data.get('contact_phone'),
+                    'email': data.get('contact_email', ''),
+                    'additional_info': data.get('additional_info', {})
+                }
+
+            elif message_type == MessageType.STICKER:
+                message.content = {
+                    'sticker_id': data.get('sticker_id'),
+                    'pack_id': data.get('pack_id', ''),
+                    'sticker_metadata': data.get('sticker_metadata', {})
+                }
+
+            elif message_type == MessageType.SYSTEM:
+                message.content = {
+                    'action': data.get('action'),
+                    'metadata': data.get('metadata', {})
+                }
+
+            # Save the message
+            message.save()
            
             active_members = message.group_chat.members.exclude(
                 id=self.user.id
@@ -991,4 +1015,45 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         }))
 
 
+
+
+
+def validate_message_data( message_type, data):
+        """Validate message data based on message type"""
+        print("data",data)
+        try:
+            if message_type == MessageType.TEXT:
+                return bool(data.get('text'))
+                
+            elif message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
+                file_data = data.get('file', {})
+                return all([
+                    file_data.get('path'),
+                    file_data.get('name'),
+                    file_data.get('type')
+                ])
+                
+            elif message_type == MessageType.LOCATION:
+                return all([
+                    data.get('latitude') is not None,
+                    data.get('longitude') is not None
+                ])
+                
+            elif message_type == MessageType.CONTACT:
+                return all([
+                    data.get('contact_name'),
+                    data.get('contact_phone')
+                ])
+                
+            elif message_type == MessageType.STICKER:
+                return bool(data.get('sticker_id'))
+                
+            elif message_type == MessageType.SYSTEM:
+                return bool(data.get('action'))
+                
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error validating message data: {str(e)}")
+            return False
 
