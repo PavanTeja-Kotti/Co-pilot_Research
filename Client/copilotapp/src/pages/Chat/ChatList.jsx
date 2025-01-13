@@ -1,32 +1,19 @@
 import React from 'react';
 import { List, Avatar, Typography, Button, Badge ,theme} from 'antd';
-import { UsergroupAddOutlined, TeamOutlined } from '@ant-design/icons';
+import { UsergroupAddOutlined, TeamOutlined,CloseOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 const { useToken } = theme;
 
 
-const ChatList = ({ chats, onSelectChat, onCreateGroup }) => {
+const ChatList = ({onClose, chats, onSelectChat, onCreateGroup }) => {
 
 
   const { token } = useToken();
   
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ 
-        padding: '20px 16px', 
-        borderBottom: '1px solid #1f1f1f',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <Text strong style={{ color: '#ffffff', fontSize: 20 }}>Chats</Text>
-        <Button
-          type="text"
-          icon={<UsergroupAddOutlined style={{ color: '#ffffff', fontSize: 20 }} />}
-          onClick={onCreateGroup}
-        />
-      </div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column',}}>
+    
       <div className='custom-scroll' style={{ flex: 1, overflowY: 'auto' }}>
       <style>
                         {`
@@ -66,7 +53,7 @@ const ChatList = ({ chats, onSelectChat, onCreateGroup }) => {
             <div
               onClick={() => onSelectChat(chat)}
               style={{
-                padding: '12px 16px',
+                padding: '16px 16px',
                 borderBottom: '1px solid #1f1f1f',
                 cursor: 'pointer',
                 display: 'flex',

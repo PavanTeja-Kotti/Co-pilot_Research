@@ -1,20 +1,97 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Button } from 'antd';
-import { MessageOutlined, CloseOutlined } from '@ant-design/icons';
-import ChatList from './Chat/ChatList';
+import { Button, Menu, List, Avatar, Badge, Typography, theme } from 'antd';
+import { 
+  MessageOutlined, 
+  CloseOutlined,
+  TeamOutlined,
+  UserOutlined,
+  RobotOutlined,
+  GlobalOutlined,
+  UsergroupAddOutlined,
+  UserAddOutlined
+} from '@ant-design/icons';
 import ChatView from './Chat/ChatView';
 import CreateGroupModal from './Chat/CreateGroupModal';
 import AIChat from './Chat/AIChat';
-import { styles } from './Chat/styles';
 import { useAuth } from '../utils/auth';
 import { chatapi, webSocket } from '../utils/socket';
+import { styles } from './Chat/styles';
+
+const { useToken } = theme;
+const { Text } = Typography;
+
+// Vertical Navigation Component
+const VerticalNavigation = ({ activeTab, onTabChange, onCreateChat, onCreateGroup }) => {
+  const menuItems = [
+    {
+      key: 'all',
+      icon: <GlobalOutlined style={{ fontSize: '20px' }} />,
+      label: 'All'
+    },
+    {
+      key: 'private',
+      icon: <MessageOutlined style={{ fontSize: '20px' }} />,
+      label: 'Chats'
+    },
+    {
+      key: 'group',
+      icon: <TeamOutlined style={{ fontSize: '20px' }} />,
+      label: 'Groups'
+    },
+    {
+      key: 'ai',
+      icon: <RobotOutlined style={{ fontSize: '20px' }} />,
+      label: 'AI'
+    },
+    {
+      key: 'Create Chat',
+      icon: <UserAddOutlined style={{ fontSize: '20px' }} />,
+      label: 'Create Chat'
+    },
+    {
+      key: 'Create Group',
+      icon: <UsergroupAddOutlined style={{ fontSize: '20px' }} />,
+      label: 'Create Group'
+    }
+  ];
+
+  return (
+    <Menu
+      selectedKeys={[activeTab]}
+      mode="inline"
+      theme="dark"
+      inlineCollapsed={true}
+      items={menuItems}
+      onClick={({ key }) => {
+        if (key === 'Create Chat') {
+          onCreateChat();
+          return;
+        }
+        if (key === 'Create Group') {
+          onCreateGroup();
+          return;
+        }
+        onTabChange(key);
+      }}
+      style={{
+        width: '60px',
+        height: '100%',
+        borderRight: '1px solid #1f1f1f',
+        backgroundColor: '#000000'
+      }}
+    />
+  );
+};
 
 const ChatUI = () => {
+  const { token } = useToken();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState(null);
   const [message, setMessage] = useState('');
   const [chats, setChats] = useState([]);
   const [showGroupModal, setShowGroupModal] = useState(false);
+  const [modalType, setModalType] = useState(null); // 'chat' or 'group'
+  const [activeTab, setActiveTab] = useState('all');
   const messagesEndRef = useRef(null);
   const { user } = useAuth();
 
@@ -103,6 +180,8 @@ const ChatUI = () => {
     };
   }, [user.email]);
 
+  console.log('chat', chats);
+
   // WebSocket message handler
   const handleManagementMessage = useCallback((data) => {
     if (data.type === 'chats_list') {
@@ -185,6 +264,21 @@ const ChatUI = () => {
     });
   }, [selectedChat]);
 
+  const handleCreateChat = () => {
+    setModalType('chat');
+    setShowGroupModal(true);
+  };
+
+  const handleCreateGroup = () => {
+    setModalType('group');
+    setShowGroupModal(true);
+  };
+
+  const handleModalClose = () => {
+    setShowGroupModal(false);
+    setModalType(null);
+  };
+
   // Initialize WebSocket connection
   useEffect(() => {
     const initializeChats = async () => {
@@ -210,7 +304,69 @@ const ChatUI = () => {
     return () => unsubscribe();
   }, [handleManagementMessage]);
 
+  // Filter chats based on active tab
+  const filteredChats = chats.filter(chat => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'private') return chat.type === 'private';
+    if (activeTab === 'group') return chat.type === 'group';
+    return true;
+  });
 
+  const renderContent = () => {
+    if (activeTab === 'ai') {
+      return <AIChat />;
+    }
+
+    return (
+      <div style={{ display: 'flex', flex: 1 }}>
+        <div style={{ width: '300px', borderRight: '1px solid #1f1f1f' }}>
+          <List
+            className="chat-list"
+            style={styles.chatList}
+            dataSource={filteredChats}
+            renderItem={chat => (
+              <List.Item
+                onClick={() => setSelectedChat(chat)}
+                style={styles.chatItem}
+                className="hover:bg-gray-900"
+              >
+                <Badge count={chat.unread || 0}>
+                  <Avatar 
+                    style={styles.avatar}
+                    icon={chat.type === 'group' ? <TeamOutlined /> : <UserOutlined />}
+                  >
+                    {chat.avatar}
+                  </Avatar>
+                </Badge>
+                <div style={styles.chatItemContent}>
+                  <div style={{ color: '#ffffff', fontWeight: 500 }}>
+                    {chat.name}
+                  </div>
+                  <div style={{ color: '#999', fontSize: '12px' }}>
+                    {chat.lastMessage || 'No messages yet'}
+                  </div>
+                </div>
+                <div style={{ color: '#999', fontSize: '12px' }}>
+                  {chat.time}
+                </div>
+              </List.Item>
+            )}
+          />
+        </div>
+        {selectedChat && (
+          <ChatView
+            chat={selectedChat}
+            onBack={() => setSelectedChat(null)}
+            message={message}
+            setMessage={setMessage}
+            onSendMessage={handleSendMessage}
+            onFileUpload={handleFileUpload}
+            messagesEndRef={messagesEndRef}
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -229,38 +385,39 @@ const ChatUI = () => {
           transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
           opacity: isOpen ? 1 : 0,
           visibility: isOpen ? 'visible' : 'hidden',
-          transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out',
+          transition: 'transform 0.3s ease-in-out, opacity 0.3s ease-in-out'
         }}>
-          {!selectedChat ? (
-            <ChatList
-              chats={chats}
-              onSelectChat={setSelectedChat}
-              onCreateGroup={() => setShowGroupModal(true)}
+          <div style={styles.header}>
+            <Text strong style={styles.headerTitle}>
+              {activeTab === 'ai' ? 'AI Chat' : 'Messages'}
+            </Text>
+            <Button
+              type="text"
+              icon={<CloseOutlined style={{ color: '#ffffff', fontSize: 20 }} />}
+              onClick={() => setIsOpen(false)}
             />
-          ) : (
-            <ChatView
-              chat={selectedChat}
-              onBack={() => setSelectedChat(null)}
-              message={message}
-              setMessage={setMessage}
-              onSendMessage={handleSendMessage}
-              onFileUpload={handleFileUpload}
-              messagesEndRef={messagesEndRef}
+          </div>
+
+          <div style={{ display: 'flex', height: 'calc(100% - 73px)' }}>
+            <VerticalNavigation 
+              activeTab={activeTab} 
+              onTabChange={setActiveTab}
+              onCreateChat={handleCreateChat}
+              onCreateGroup={handleCreateGroup}
             />
-          )}
+            {renderContent()}
+          </div>
         </div>
 
         <CreateGroupModal
-
           visible={showGroupModal}
-          onClose={() => setShowGroupModal(false)}
+          onClose={handleModalClose}
           chats={chats.filter(chat => chat.type === 'private')}
           onSelectChat={setSelectedChat}
           onCreate={null}
+          type={modalType}
         />
       </div>
-
-      <AIChat />
     </>
   );
 };

@@ -248,7 +248,7 @@ return (
 };
 
 return (
-<div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+  <div style={{ height: '100%', display: 'flex', flexDirection: 'column',flex:1,backgroundColor: token.colorBgContainer ,}}>
   {/* Header */}
   <div
     style={{
@@ -334,6 +334,7 @@ return (
     style={{
       padding: "8px 12px",
       borderTop: "1px solid #1f1f1f",
+      paddingBottom:5
     }}
   >
     <Space.Compact style={{ width: "100%", display: "flex", gap: 8 }}>
