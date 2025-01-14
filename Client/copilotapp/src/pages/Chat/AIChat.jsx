@@ -1,206 +1,156 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Button, Input, List, Typography, Avatar, Upload, message, theme } from "antd";
 import {
-  RobotOutlined,
+  Button,
+  Input,
+  List,
+  Typography,
+  Upload,
+  message,
+  theme,
+} from "antd";
+import {
   SendOutlined,
   PaperClipOutlined,
-  FileOutlined,
-  CloseOutlined,
 } from "@ant-design/icons";
+import MessageBubble from "./MessageBubble";
 import { styles } from "./styles";
-import { chatapi, webSocket } from "../../utils/socket";
+import { chatapi } from "../../utils/socket";
 
 const { TextArea } = Input;
-const { Text } = Typography;
 const { useToken } = theme;
 
-const MessageBubble = ({ message, sender }) => {
-  const isOwnMessage = sender === "sender";
-
-  const renderContent = () => {
-    switch (message.type) {
-      case "file":
-        return (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              backgroundColor: isOwnMessage ? "#1677ff" : "#ffffff",
-              color: isOwnMessage ? "#ffffff" : "#000000",
-              borderRadius: 16,
-              cursor: "pointer",
-            }}
-          >
-            <FileOutlined />
-            <div>
-              <div>{message.fileName}</div>
-              <div style={{ fontSize: 12, opacity: 0.7 }}>
-                {message.fileSize}
-              </div>
-            </div>
-          </div>
-        );
-      case "image":
-        return (
-          <img
-            src={message.url}
-            alt="Uploaded"
-            style={{
-              maxWidth: "200px",
-              borderRadius: 16,
-              backgroundColor: "#ffffff",
-            }}
-          />
-        );
-      default:
-        return (
-          <Text
-            style={{
-              display: "inline-block",
-              padding: "10px 12px",
-              backgroundColor: isOwnMessage ? "#1677ff" : "#ffffff",
-              color: isOwnMessage ? "#ffffff" : "#000000",
-              borderRadius: 16,
-              fontSize: 14,
-              wordBreak: "break-word",
-              boxShadow: !isOwnMessage ? "0 2px 4px rgba(0,0,0,0.1)" : "none",
-            }}
-          >
-            {message.text}
-          </Text>
-        );
-    }
-  };
-
-  return (
-    <div
-      style={{
-        textAlign: isOwnMessage ? "right" : "left",
-        marginBottom: 12,
-        padding: "0 12px",
-      }}
-    >
-      <div style={{ maxWidth: "75%", display: "inline-block" }}>
-        {renderContent()}
-      </div>
-    </div>
-  );
-};
-
-const Chat = ({ onclose }) => {
+const Chat = ({ uniqueID }) => {
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const inputRef = useRef(null);
   const [messages, setMessages] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isWaitingForAI, setIsWaitingForAI] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
 
-  // Focus input when component mounts
-  useEffect(() => {
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-  }, []);
+  // Helper functions for session storage
+  const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;
+  
+  const saveToSessionStorage = (messages, sessionId) => {
 
-  const handleAIMessage = useCallback((data) => {
-    if (data.type === 'message') {
+    console.log("Saving chat to session storage:", messages, sessionId, uniqueID);
+
+    if (!uniqueID || !sessionId) return;
+    const key = getStorageKey(uniqueID, sessionId);
+    sessionStorage.setItem(key, JSON.stringify({
+      messages,
+      sessionId,
+      lastUpdated: new Date().toISOString()
+    }));
+
+   
+  };
+
+  const loadFromSessionStorage = (sessionId) => {
+    if (!uniqueID || !sessionId) return null;
+    const key = getStorageKey(uniqueID, sessionId);
+    const stored = sessionStorage.getItem(key);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (error) {
+        console.error('Error parsing stored chat:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const addMessage = (messageData) => {
+    setMessages(prev => {
+      const messageExists = prev.some(m => m.id === messageData.id);
+      if (messageExists) return prev;
+      const newMessages = [...prev, messageData];
+      // Save to session storage after adding new message
+      saveToSessionStorage(newMessages, messageData.session_id);
+      return newMessages;
+    });
+  };
+
+  const handleAIChatMessage = useCallback((data) => {
+    if (data.type === "chat_created") {
+      const newSessionId = data.chat_id;
+      setSessionId(newSessionId);
+      
+      // Try to load existing chat
+      const existingChat = loadFromSessionStorage(newSessionId);
+      if (existingChat) {
+        setMessages(existingChat.messages);
+      }
+      
+      setIsConnected(true);
+      setIsLoading(false);
+      setIsWaitingForAI(false);
+    } else if (data.type === "message") {
       const msg = data.message;
       
-      setMessages(prev => {
-        // Check if message with this ID already exists
-        const messageExists = prev.some(m => m.id === msg.id);
-        if (messageExists) {
-          return prev; // Don't add duplicate message
-        }
-
-        const newMessage = {
-          id: msg.id,
-          sender: msg.message_type === 'ai' ? 'receiver' : 'sender',
-          text: msg.text_content,
-          type: msg.content?.type || 'text',
-          fileName: msg.content?.filename,
-          fileSize: msg.content?.fileSize,
-          url: msg.content?.url,
-          timestamp: msg.timestamp || new Date().toISOString(),
-          is_read: msg.is_read
-        };
-
-        return [...prev, newMessage];
-      });
       
-      setIsLoading(false);
-      // Focus input after message is received
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 0);
-    } else if (data.type === 'error') {
+      const currentSessionId = data.session_id || sessionId;
+
+  
+      
+      if (currentSessionId) {
+        addMessage({
+          id: msg.id,
+          sender: msg.sender,
+          text_content: msg.text_content,
+          content: msg.content || {},
+          message_type: msg.message_type,
+          status: msg.status,
+          attachments: msg.attachments || [],
+          created_at: msg.created_at,
+          receipts: msg.receipts || [],
+          metadata: msg.metadata || {},
+          session_id: currentSessionId,
+        });
+      }
+
+      if (msg.sender.username === "AI Assistant") {
+        setIsLoading(false);
+        setIsWaitingForAI(false);
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 0);
+      }
+    } else if (data.type === "error") {
       message.error(data.message);
       setIsLoading(false);
-      // Focus input after error
+      setIsWaitingForAI(false);
       setTimeout(() => {
         inputRef.current?.focus();
       }, 0);
     }
-  }, []);
-
-  useEffect(() => {
-    const connectToAIChat = async () => {
-      try {
-        await chatapi.connectAIChat();
-        setIsConnected(true);
-        // Add initial welcome message with ID
-        setMessages([{
-          id: 'welcome-message',
-          sender: "receiver",
-          text: "Hello! How can I help you today?",
-          type: "text",
-          timestamp: new Date().toISOString(),
-          is_read: true
-        }]);
-      } catch (error) {
-        console.error('Failed to connect to AI chat:', error);
-        message.error('Failed to connect to AI chat');
-      }
-    };
-
-    chatapi.ws.onMessage('ai_chat', handleAIMessage);
-    connectToAIChat();
-
-    return () => {
-      chatapi.disconnectAIChat();
-      chatapi.ws.offMessage('ai_chat', handleAIMessage);
-    };
-  }, [handleAIMessage]);
-
-  useEffect(() => {
-    const unsubscribe = webSocket.onMessage('ai', handleAIMessage);
-    return () => unsubscribe();
-  }, [handleAIMessage]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, [uniqueID,sessionId,addMessage]);
 
   const handleSendMessage = async () => {
-    if (inputMessage.trim() && isConnected && !isLoading) {
+    if (inputMessage.trim() && isConnected && !isLoading && !isWaitingForAI) {
       try {
         setIsLoading(true);
-        setInputMessage(""); // Clear input immediately
-
-        // Send to WebSocket - don't manually add the message
-        await chatapi.sendAIChatMessage(inputMessage);
+        setIsWaitingForAI(true);
+        
+        const messageToSend = inputMessage;
+        setInputMessage("");
+        
+        await chatapi.sendAIChatMessage({
+          text: messageToSend,
+          message_type: "TEXT",
+          content: {},
+          session_id: sessionId,
+        });
       } catch (error) {
-        console.error('Failed to send message:', error);
-        message.error('Failed to send message');
+        console.error("Failed to send message:", error);
+        message.error("Failed to send message");
         setIsLoading(false);
-        // Focus input after error
+        setIsWaitingForAI(false);
+        
         setTimeout(() => {
           inputRef.current?.focus();
         }, 0);
@@ -209,8 +159,8 @@ const Chat = ({ onclose }) => {
   };
 
   const handleFileUpload = async (file) => {
-    if (!isConnected || isLoading) {
-      message.error('Cannot upload file at this time');
+    if (!isConnected || isLoading || isWaitingForAI) {
+      message.error("Cannot upload file at this time");
       return false;
     }
 
@@ -218,67 +168,129 @@ const Chat = ({ onclose }) => {
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
 
     if (fileSizeMB > 5) {
-      message.error('File size should not exceed 5MB');
+      message.error("File size should not exceed 5MB");
       return false;
     }
 
     try {
       setIsLoading(true);
-      const reader = new FileReader();
+      setIsWaitingForAI(true);
       
+      const reader = new FileReader();
+
       reader.onload = async (e) => {
         const base64Content = e.target.result;
-        
-        // Send file through WebSocket - don't manually add the message
-        await chatapi.sendAIChatMessage(
-          `Uploaded file: ${file.name}`, 
-          'file',
-          {
+
+        await chatapi.sendAIChatMessage({
+          text: `Uploaded file: ${file.name}`,
+          message_type: "TEXT",
+          session_id: sessionId,
+          content: {
             filename: file.name,
             content: base64Content,
             fileType: file.type,
             fileSize: fileSizeMB,
-            type: isImage ? 'image' : 'file',
-            url: isImage ? URL.createObjectURL(file) : null
-          }
-        );
-        // File message will be added by handleAIMessage when received from server
+            type: isImage ? "image" : "file",
+            url: isImage ? URL.createObjectURL(file) : null,
+          },
+        });
       };
 
       reader.onerror = () => {
-        message.error('Failed to read file');
+        message.error("Failed to read file");
         setIsLoading(false);
+        setIsWaitingForAI(false);
       };
 
       reader.readAsDataURL(file);
     } catch (error) {
-      console.error('Failed to upload file:', error);
-      message.error('Failed to upload file');
+      console.error("Failed to upload file:", error);
+      message.error("Failed to upload file");
       setIsLoading(false);
+      setIsWaitingForAI(false);
     }
 
     return false;
   };
 
+  // Initialize chat connection
+  useEffect(() => {
+    const connectToAIChat = async () => {
+      try {
+        // Check if there's an existing session in storage
+        const existingSessions = Object.keys(sessionStorage)
+          .filter(key => key.startsWith(`chat_${uniqueID}_`))
+          .map(key => {
+            const data = JSON.parse(sessionStorage.getItem(key));
+            return {
+              key,
+              sessionId: data.sessionId,
+              lastUpdated: new Date(data.lastUpdated)
+            };
+          })
+          .sort((a, b) => b.lastUpdated - a.lastUpdated);
+
+        if (existingSessions.length > 0) {
+          // Use the most recent session
+          const mostRecentSession = existingSessions[0];
+          const storedChat = loadFromSessionStorage(mostRecentSession.sessionId);
+          
+          if (storedChat) {
+            setSessionId(storedChat.sessionId);
+            setMessages(storedChat.messages);
+            
+            // Reconnect to existing session
+            await chatapi.connectAIChat()
+            setIsConnected(true);
+            setIsLoading(false);
+            setIsWaitingForAI(false);
+
+            return;
+          }
+        }
+
+        // If no valid stored session, start new chat
+        await chatapi.sendAIChatMessage({
+          text: "Hello AI!",
+          message_type: "TEXT",
+          content: {},
+        });
+      } catch (error) {
+        console.error("Failed to connect to AI chat:", error);
+        message.error("Failed to connect to AI chat");
+      }
+    };
+
+    chatapi.ws.onMessage("ai", handleAIChatMessage);
+    connectToAIChat();
+
+    return () => {
+      chatapi.disconnectAIChat();
+      chatapi.ws.offMessage("ai", handleAIChatMessage);
+    };
+  }, [uniqueID]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    if (chatContainerRef.current) {
+      const { scrollHeight, clientHeight } = chatContainerRef.current;
+      chatContainerRef.current.scrollTop = scrollHeight - clientHeight;
+    }
+  };
+
   return (
-    // <div style={styles.aiChatContainer}>
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column',flex:1,backgroundColor: token.colorBgContainer ,}}>
-      {/* <div style={styles.aiChatHeader}>
-        <Avatar style={{ backgroundColor: "#8B5CF6" }}>AI</Avatar>
-        <div style={{ flex: 1 }}>
-          <Text strong style={{ color: "#ffffff" }}>
-            AI Assistant {!isConnected && "(Connecting...)"}
-          </Text>
-        </div>
-
-        <Button
-          type="text"
-          onClick={onclose}
-          icon={<CloseOutlined style={{ color: "#ffffff" }} />}
-        />
-      </div> */}
-
-      <div className="custom-scroll" style={styles.aiChatMessages}>
+    <div style={{
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      flex: 1,
+      backgroundColor: token.colorBgContainer,
+    }}>
+      <div ref={chatContainerRef} className="custom-scroll" style={styles.aiChatMessages}>
         <style>
           {`
             .custom-scroll::-webkit-scrollbar {
@@ -307,11 +319,14 @@ const Chat = ({ onclose }) => {
             }
           `}
         </style>
-
         <List
           dataSource={messages}
           renderItem={(msg) => (
-            <MessageBubble message={msg} sender={msg.sender} key={msg.id} />
+            <MessageBubble 
+              key={msg.id} 
+              message={msg} 
+              sender={msg.sender}
+            />
           )}
         />
         <div ref={messagesEndRef} />
@@ -332,7 +347,7 @@ const Chat = ({ onclose }) => {
                 color: "#fff",
                 borderRadius: "20px",
               }}
-              disabled={!isConnected || isLoading}
+              disabled={!isConnected || isLoading || isWaitingForAI}
             />
           </Upload>
           <TextArea
@@ -345,7 +360,15 @@ const Chat = ({ onclose }) => {
                 handleSendMessage();
               }
             }}
-            placeholder={isConnected ? (isLoading ? "AI is typing..." : "Type a message...") : "Connecting..."}
+            placeholder={
+              !isConnected 
+                ? "Connecting..." 
+                : isWaitingForAI 
+                  ? "Waiting for AI response..." 
+                  : isLoading 
+                    ? "AI is typing..." 
+                    : "Type a message..."
+            }
             autoSize={{ minRows: 1, maxRows: 4 }}
             style={{
               flex: 1,
@@ -357,7 +380,7 @@ const Chat = ({ onclose }) => {
               padding: "10px 12px",
               fontSize: "14px",
             }}
-            disabled={!isConnected || isLoading}
+            disabled={!isConnected || isLoading || isWaitingForAI}
           />
           <Button
             type="primary"
@@ -370,36 +393,12 @@ const Chat = ({ onclose }) => {
               backgroundColor: "#8B5CF6",
               border: "none",
             }}
-            disabled={!isConnected || isLoading || !inputMessage.trim()}
+            disabled={!isConnected || isLoading || isWaitingForAI || !inputMessage.trim()}
             loading={isLoading}
           />
         </div>
       </div>
     </div>
-  );
-};
-
-const AIChat = () => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <>
-      <Button
-        type="primary"
-        shape="circle"
-        size="large"
-        icon={<RobotOutlined />}
-        onClick={() => setIsOpen(true)}
-        style={{
-          ...styles.aiChatButton,
-          display: isOpen ? "none" : "flex",
-        }}
-      />
-
-      {isOpen && <Chat onclose={() => {
-        setIsOpen(false);
-      }} />}
-    </>
   );
 };
 

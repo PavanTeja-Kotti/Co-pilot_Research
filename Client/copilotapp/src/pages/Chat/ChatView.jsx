@@ -229,6 +229,8 @@ const ChatView = ({
     }
   };
 
+  console.log(chat);
+
   const renderMessages = () => {
     const uploadingMessages = Array.from(uploadingFiles.entries()).map(
       ([id, data]) => ({

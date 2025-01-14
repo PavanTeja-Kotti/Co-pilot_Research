@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, Typography, Tag } from "antd";
 import PdfViewer from "../components/common/PdfViewer";
 import ChatWindow from "../components/common/ChatWindow";
+import AIChat from "./Chat/AIChat"
 
 const { Title, Text } = Typography;
 
@@ -32,7 +33,7 @@ const mockData = [
   },
 ];
 
-const Sumarization = () => {
+const Summarization = () => {
   const [expandedCardId, setExpandedCardId] = useState(null);
   const [animateCards, setAnimateCards] = useState(false);
 
@@ -44,17 +45,44 @@ const Sumarization = () => {
     setExpandedCardId((prevId) => (prevId === id ? null : id));
   };
 
+  const renderExpandedContent = (paper) => {
+    if (expandedCardId !== paper.id) return null;
+
+    return (
+      <div
+        style={{
+          maxHeight: "600px",
+          overflow: "hidden",
+          transition: "max-height 0.9s ease",
+          marginTop: "16px",
+          background: "rgb(41, 41, 41)",
+          padding: "16px",
+          borderRadius: "8px",
+          display: "flex",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ flex: 1, paddingRight: "8px", background: "rgb(30, 30, 30)" }}>
+          <AIChat uniqueID ={paper.id} />
+        </div>
+        <div style={{ flex: 1, paddingLeft: "8px", background: "rgb(30, 30, 30)" }}>
+          <PdfViewer pdfUrl={paper.pdf_url} />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       style={{
         padding: "20px",
-        backgroundColor: "rgb(20, 20, 20)", // Full background color
-        minHeight: "100vh", // Ensure it covers the full viewport height
+        backgroundColor: "rgb(20, 20, 20)",
+        minHeight: "100vh",
       }}
     >
       <Title level={2} style={{ color: "#fff" }}>Research Papers</Title>
 
-      {mockData.map((paper, index) => (
+      {mockData.map((paper) => (
         <Card
           key={paper.id}
           hoverable
@@ -63,8 +91,8 @@ const Sumarization = () => {
             marginBottom: "16px",
             cursor: "pointer",
             overflow: "hidden",
-            backgroundColor: "rgb(30, 30, 30)", // Card background
-            color: "#fff", // Card text color
+            backgroundColor: "rgb(30, 30, 30)",
+            color: "#fff",
           }}
           bodyStyle={{ padding: "16px" }}
           onClick={() => handleCardClick(paper.id)}
@@ -86,34 +114,12 @@ const Sumarization = () => {
               </Tag>
             ))}
           </div>
-
-          <div
-            style={{
-              maxHeight: expandedCardId === paper.id ? "600px" : "0", // Limit height for transition
-              overflow: "hidden",
-              transition: "max-height 0.9s ease", // Smooth transition
-              marginTop: expandedCardId === paper.id ? "16px" : "0",
-              background: expandedCardId === paper.id ? "rgb(41, 41, 41)" : "transparent",
-              padding: expandedCardId === paper.id ? "16px" : "0",
-              borderRadius: "8px",
-              display: "flex",
-            }}
-            onClick={(e) => e.stopPropagation()} // Prevent the click event from propagating to the Card
-          >
-            {/* Left: ChatWindow */}
-            <div style={{ flex: 1, paddingRight: "8px", background: "rgb(30, 30, 30)" }}>
-              <ChatWindow />
-            </div>
-
-            {/* Right: PdfViewer */}
-            <div style={{ flex: 1, paddingLeft: "8px", background: "rgb(30, 30, 30)" }}>
-              <PdfViewer pdfUrl={paper.pdf_url} />
-            </div>
-          </div>
+          
+          {renderExpandedContent(paper)}
         </Card>
       ))}
     </div>
   );
 };
 
-export default Sumarization;
+export default Summarization;

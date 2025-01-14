@@ -577,19 +577,17 @@ class ChatAPI {
         await this.ws.disconnect('notifications');
     }
 
-    // AI Chat Methods
+ 
+
     async connectAIChat() {
         await this.ws.connect('ai');
     }
 
-    async sendAIChatMessage(text, messageType = 'text') {
-        return this.ws.send('ai', null, {
-            text,
-            message_type: messageType,
-            content: {}
-        });
+    async sendAIChatMessage(content) {
+        await this.ws.connect('ai');
+        return this.ws.send('ai', null,content);
     }
-
+    
     async disconnectAIChat() {
         await this.ws.disconnect('ai');
     }
@@ -616,24 +614,7 @@ class ChatAPI {
     }
 
     handleAIChatMessage(data) {
-        if (data.type === 'message') {
-            const message = data.message;
-            switch (message.message_type) {
-                case 'text':
-                    console.log('User message:', message);
-                    break;
-                case 'ai':
-                    console.log('AI response:', message);
-                    break;
-                case 'system':
-                    console.log('System message:', message);
-                    break;
-                default:
-                    console.log('Unknown message type:', message);
-            }
-        } else if (data.type === 'error') {
-            console.error('AI Chat error:', data.message);
-        }
+        console.log('AI Chat message:', data);
     }
 
     // Cleanup method
