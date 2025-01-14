@@ -8,6 +8,9 @@ import uuid
 from channels.generic.websocket import AsyncWebsocketConsumer
 from dataclasses import dataclass, asdict
 from abc import ABC, abstractmethod
+from . import consumers
+
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +30,21 @@ class MessageStatus(Enum):
     READ = 'READ'
     FAILED = 'FAILED'
 
-# Data classes for structured message handling
+
+@dataclass
+class Attachment:
+    id: str
+    file_type: str
+    file_name: str
+    file_path: str
+    file_size: int
+    created_at: str
+    file: Optional[str] = None
+
+
+    
+    
+
 @dataclass
 class User:
     id: int
@@ -40,14 +57,14 @@ class User:
 
 @dataclass
 class MessageReceipt:
-    id: int
+    id: str
     user: Dict[str, Any]
     delivered_at: Optional[str] = None
     read_at: Optional[str] = None
 
 @dataclass
 class ChatMessage:
-    id: int
+    id: str
     sender: Dict[str, Any]
     text_content: str
     content: Dict[str, Any]
@@ -198,6 +215,16 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             session_id = data.get('session_id')
+
+
+            message_type = data.get('message_type', MessageType.TEXT)
+            if not consumers.validate_message_data(message_type, data):
+                await self.send(json.dumps({
+                    'type': 'error',
+                    'message': 'Invalid message data'
+                }))
+                return
+
             
             if not session_id:
                 session = await self.create_new_session()
@@ -247,13 +274,17 @@ class AIChatConsumer(AsyncWebsocketConsumer):
     async def save_message(self, data: Dict, session_id: str, is_ai: bool = False) -> Dict:
         """Save message to chat session"""
         try:
+            
             chat_session = self.active_chats[self.user.id][session_id]
             timestamp = datetime.now().isoformat()
             
             sender = self.AI_ASSISTANT if is_ai else chat_session["members"][0]
-            
+            message_type = data.get('message_type', MessageType.TEXT)
+
+            id=uuid.uuid4().hex[:8]
+            file_data = data.get('file', {})
             message = ChatMessage(
-                id=len(chat_session["messages"]) + 1,
+                id=id,
                 sender=sender,
                 text_content=data.get('text', ''),
                 content=data.get('content', {}),
@@ -261,10 +292,19 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                 status=MessageStatus.SENT.value,
                 created_at=timestamp,
                 updated_at=timestamp,
-                attachments=[],
+                attachments=   [ 
+                    asdict(Attachment(
+                        id=uuid.uuid4().hex[:8],
+                        file_type=file_data.get('type', ''),
+                        file_name=file_data.get('name', ''),
+                        file_path=file_data.get('path', ''),
+                        file_size=file_data.get('size', 0),
+                        created_at=timestamp
+                    )) 
+                ] if file_data else [] ,
                 receipts=[
                     asdict(MessageReceipt(
-                        id=len(chat_session["messages"]) + 1,
+                        id=id,
                         user=self.AI_ASSISTANT if not is_ai else chat_session["members"][0]
                     ))
                 ],
