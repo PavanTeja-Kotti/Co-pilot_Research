@@ -376,7 +376,7 @@ def category_like_list(request):
 @permission_classes([IsAuthenticated])
 def summarization_paper(request, pdf_url=None):
     if request.method == 'POST':
-        # Get the PDF URL from the frontend
+        # Get the PDF URL frgit reset --hard HEAD~3om the frontend
         pdf_url = request.data.get('pdf_url', None)
         print(" PDF URL: ", pdf_url)
 
