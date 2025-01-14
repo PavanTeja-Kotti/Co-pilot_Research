@@ -1,8 +1,9 @@
 from django.db import models
 from django.conf import settings
+import uuid
 
-# Your existing ResearchPaper and BookmarkedPaper models
 class ResearchPaper(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=500)
     abstract = models.TextField()
     authors = models.JSONField()
@@ -29,6 +30,7 @@ class ResearchPaper(models.Model):
         ]
 
 class BookmarkedPaper(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         on_delete=models.SET_NULL,
@@ -60,8 +62,8 @@ class BookmarkedPaper(models.Model):
         self.is_active = False
         self.save()
 
-# Category models as separate entities
 class ResearchPaperCategory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
     icon = models.TextField(null=True, blank=True)
     description = models.TextField()
@@ -109,6 +111,7 @@ class ResearchPaperCategory(models.Model):
         return self.likes.filter(id=user.id).exists()
 
 class CategoryLike(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
