@@ -3,7 +3,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from django.shortcuts import get_object_or_404
+from rest_framework.pagination import LimitOffsetPagination
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q
 from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike
 from .serializers import (
     ResearchPaperSerializer, 
@@ -11,10 +13,19 @@ from .serializers import (
     CategorySerializer,
     CategoryLikeSerializer
 )
-
 def apply_filters(queryset, request):
     """Apply filters to queryset based on request parameters."""
     filters = {}
+    
+    # Text search across multiple fields
+    if search_text := request.query_params.get('search'):
+        # Handle JSON field search for authors
+        queryset = queryset.filter(
+            Q(title__icontains=search_text) |
+            Q(abstract__icontains=search_text) |
+            # Search within the JSON array of authors
+            Q(authors__icontains=search_text)
+        )
     
     # Publication date filters
     if date_gte := request.query_params.get('publication_date__gte'):
@@ -24,23 +35,58 @@ def apply_filters(queryset, request):
     if date_exact := request.query_params.get('publication_date'):
         filters['publication_date'] = date_exact
         
-    # Source and categories filters
+    # Source filter
     if source := request.query_params.get('source'):
-        filters['source'] = source
-    if categories := request.query_params.get('categories'):
-        filters['categories__contains'] = categories
-        
-    return queryset.filter(**filters)
+        filters['source__iexact'] = source
+    
+    # Categories filter (JSON field)
+    if category := request.query_params.get('category'):
+        # Search for the category name in the JSON array
+        queryset = queryset.filter(categories__contains=[category])
+    
+    # Bookmark filter (if user is authenticated)
+    if request.user.is_authenticated:
+        if bookmarked := request.query_params.get('bookmarked'):
+            if bookmarked.lower() == 'true':
+                queryset = queryset.filter(bookmarked_by=request.user)
+            elif bookmarked.lower() == 'false':
+                queryset = queryset.exclude(bookmarked_by=request.user)
+    
+    # Apply remaining filters
+    queryset = queryset.filter(**filters)
+    
+    # Order by most recent first
+    queryset = queryset.order_by('-publication_date', '-created_at')
+    
+    return queryset.distinct()
 
 # Existing Research Paper views
+class ResearchPaperPagination(LimitOffsetPagination):
+    default_limit = 10
+    max_limit = 50
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list(request):
     if request.method == 'GET':
         queryset = ResearchPaper.objects.all()
         filtered_queryset = apply_filters(queryset, request)
-        serializer = ResearchPaperSerializer(filtered_queryset, many=True, context={'request': request})
-        return Response(serializer.data)
+        
+        # Initialize paginator
+        paginator = ResearchPaperPagination()
+        
+        # Paginate queryset
+        paginated_queryset = paginator.paginate_queryset(filtered_queryset, request)
+        
+        # Serialize paginated data
+        serializer = ResearchPaperSerializer(
+            paginated_queryset, 
+            many=True, 
+            context={'request': request}
+        )
+        
+        # Return paginated response
+        return paginator.get_paginated_response(serializer.data)
     
     elif request.method == 'POST':
         serializer = ResearchPaperSerializer(data=request.data, context={'request': request})

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
-from .models import User, Notification
+from .models import User, Notification, AccountType
 
 class NotificationInline(admin.TabularInline):
     model = Notification
@@ -12,9 +12,9 @@ class NotificationInline(admin.TabularInline):
     show_change_link = True
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('email', 'username', 'first_name', 'last_name', 'is_staff', 
+    list_display = ('email', 'username', 'first_name', 'last_name', 'account_type', 'is_staff', 
                    'date_joined', 'last_login_at', 'first_login', 'unread_notifications_count')
-    list_filter = ('is_staff', 'is_active', 'date_joined', 'first_login')
+    list_filter = ('is_staff', 'is_active', 'date_joined', 'first_login', 'account_type')
     search_fields = ('email', 'username', 'first_name', 'last_name')
     ordering = ('-date_joined',)
     
@@ -23,7 +23,7 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'profile_image', 'profile_image_preview', 'bio')}),
-        ('Login info', {'fields': ('last_login_at', 'first_login')}),
+        ('Account Settings', {'fields': ('account_type', 'last_login_at', 'first_login')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Notifications', {'fields': ('unread_notifications_count',)}),
     )
@@ -32,11 +32,17 @@ class CustomUserAdmin(UserAdmin):
         (None, {
             'classes': ('wide',),
             'fields': ('email', 'username', 'password1', 'password2', 'first_name', 'last_name', 
-                      'profile_image', 'bio', 'is_staff', 'is_active')}
+                      'profile_image', 'bio', 'account_type', 'is_staff', 'is_active')}
         ),
     )
 
     readonly_fields = ('profile_image_preview', 'last_login_at', 'first_login', 'unread_notifications_count')
+    
+    def get_list_display_links(self, request, list_display):
+        """
+        Make email and username clickable in the admin list view
+        """
+        return ('email', 'username')
 
     def profile_image_preview(self, obj):
         if obj.profile_image:
@@ -56,11 +62,27 @@ class CustomUserAdmin(UserAdmin):
         )
     unread_notifications_count.short_description = 'Unread Notifications'
 
+    def account_type_display(self, obj):
+        """
+        Custom display for account type with color coding
+        """
+        colors = {
+            AccountType.PERSON: '#28a745',  # Green for person accounts
+            AccountType.BOT: '#17a2b8'      # Blue for bot accounts
+        }
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            colors.get(obj.account_type, 'black'),
+            obj.get_account_type_display()
+        )
+    account_type_display.short_description = 'Account Type'
+    account_type_display.admin_order_field = 'account_type'
+
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user_email', 'title', 'notification_type', 'is_read', 
+    list_display = ('id', 'user_email', 'user_account_type', 'title', 'notification_type', 'is_read', 
                    'created_at', 'read_at', 'deleted_at')
-    list_filter = ('notification_type', 'is_read', 'created_at', 'deleted_at')
+    list_filter = ('notification_type', 'is_read', 'created_at', 'deleted_at', 'user__account_type')
     search_fields = ('user__email', 'title', 'message')
     ordering = ('-created_at',)
     date_hierarchy = 'created_at'
@@ -86,6 +108,12 @@ class NotificationAdmin(admin.ModelAdmin):
         return obj.user.email
     user_email.short_description = 'User Email'
     user_email.admin_order_field = 'user__email'
+
+    def user_account_type(self, obj):
+        """Display user's account type"""
+        return obj.user.get_account_type_display()
+    user_account_type.short_description = 'Account Type'
+    user_account_type.admin_order_field = 'user__account_type'
 
     def mark_as_read(self, request, queryset):
         for notification in queryset:

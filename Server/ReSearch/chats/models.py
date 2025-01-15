@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.conf import settings
+import uuid
 
 class MessageStatus(models.TextChoices):
     """Enum for message status"""
@@ -23,6 +24,7 @@ class MessageType(models.TextChoices):
 
 class BaseChat(models.Model):
     """Abstract base model for chat functionality"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
@@ -51,8 +53,6 @@ class Chat(BaseChat):
     def hard_delete(self):
         """Hard delete the chat and associated messages"""
         self.delete();  # Delete the chat
-    
-   
 
 class GroupChat(BaseChat):
     """Model for group chats"""
@@ -95,6 +95,7 @@ class GroupChat(BaseChat):
 
 class GroupMembership(models.Model):
     """Model to track group chat membership details"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     group = models.ForeignKey(GroupChat, on_delete=models.CASCADE)
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -107,9 +108,11 @@ class GroupMembership(models.Model):
         indexes = [
             models.Index(fields=['user', 'group', 'is_active']),
         ]
+
 class MessageAttachment(models.Model):
     """Model for message attachments"""
-    file = models.TextField(help_text="Base64 encoded file content", null=True, blank=True)  # Made optional
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    file = models.TextField(help_text="Base64 encoded file content", null=True, blank=True)
     file_path = models.CharField(
         max_length=512, 
         help_text="Path to the stored file on disk or cloud storage"
@@ -124,6 +127,7 @@ class MessageAttachment(models.Model):
 
 class Message(models.Model):
     """Model for chat messages"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     chat = models.ForeignKey(
         Chat,
         on_delete=models.CASCADE,
@@ -215,6 +219,7 @@ class Message(models.Model):
 
 class MessageReceipt(models.Model):
     """Model to track message read/delivery status per user"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     message = models.ForeignKey(
         Message,
         on_delete=models.CASCADE,

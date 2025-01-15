@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils import timezone
+import uuid
 
 class UserManager(BaseUserManager):
     def create_user(self, email, username, password=None, **extra_fields):
@@ -16,6 +17,11 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(email, username, password, **extra_fields)
+
+class AccountType(models.TextChoices):
+    """Enum for different types of accounts"""
+    PERSON = 'PERSON', 'Person Account'
+    BOT = 'BOT', 'Bot Account'
 
 class NotificationType(models.TextChoices):
     """Enum for different types of notifications"""
@@ -39,6 +45,7 @@ class NotificationManager(models.Manager):
         return super().get_queryset().filter(deleted_at__isnull=False)
 
 class User(AbstractUser):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, unique=True)
     first_name = models.CharField(max_length=150, blank=True)
@@ -50,6 +57,12 @@ class User(AbstractUser):
     bio = models.TextField(blank=True, null=True, help_text="User biography")
     last_login_at = models.DateTimeField(null=True, blank=True)
     first_login = models.BooleanField(default=True)
+    account_type = models.CharField(
+        max_length=20,
+        choices=AccountType.choices,
+        default=AccountType.PERSON,
+        help_text="Type of account (Person or Bot)"
+    )
 
     objects = UserManager()
 
@@ -83,6 +96,7 @@ class User(AbstractUser):
         return self.notifications.filter(deleted_at__isnull=True)
 
 class Notification(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

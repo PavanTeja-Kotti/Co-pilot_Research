@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -5,7 +6,9 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import Prefetch
 from django.db.models import Q
+import uuid
 from .models import (
+    
     Chat, 
     GroupChat, 
     Message, 
@@ -14,6 +17,7 @@ from .models import (
     MessageType,
     MessageStatus,
     MessageAttachment
+    
 )
 from .serializers import (
     MessageSerializer,
@@ -21,6 +25,7 @@ from .serializers import (
     GroupChatSerializer
 )
 from django.db import models
+from . import middleware
 
 logger = logging.getLogger(__name__)
 
@@ -153,11 +158,12 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
                     
             elif command == 'delete_group':
                 group_data = await self.delete_group(data.get('group_id'))
+                
                 if group_data:
                     # Notify all members about group deletion
                     for member in group_data['members']:
                         await self.channel_layer.group_send(
-                            f'user_{member["id"]}_management',
+                            f'user_{member["user"]["id"]}_management',
                             {
                                 'type': 'chat_notification',
                                 'message': {
@@ -410,7 +416,15 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
                 group=group,
                 is_active=True
             )
-            
+
+            BOT=middleware.User.objects.get(email='bot@gmail.com')
+            if BOT:
+                GroupMembership.objects.create(
+                    user=BOT,
+                    group=group,
+                    is_active=True
+                )
+           
             # Add other members
             member_ids = data.get('member_ids', [])
             for member_id in member_ids:
@@ -449,6 +463,7 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
     def delete_group(self, group_id):
         """Delete a group and return member data for notifications"""
         try:
+            print(group_id)
             group = GroupChat.objects.get(id=group_id)
             if self.user == group.creator or group.admins.filter(id=self.user.id).exists():
                 group_data = GroupChatSerializer(group, context={'user': self.user}).data
@@ -803,6 +818,7 @@ class GroupChatConsumer(BaseChatConsumer):
                 return
 
             message = await self.save_message(data)
+            message_data = None
             
             if message:
                 message_data = await self.get_message_data(message)
@@ -813,6 +829,13 @@ class GroupChatConsumer(BaseChatConsumer):
                         'message': message_data
                     }
                 )
+           
+            mention = data.get('mention', [])
+            if mention and any(d.get('name', '').lower() == 'bot' for d in mention):
+               
+                asyncio.create_task(self.handle_ai_response(data, message_data, self.group_id))
+                
+            
                 
                 
         except json.JSONDecodeError:
@@ -828,6 +851,30 @@ class GroupChatConsumer(BaseChatConsumer):
                 'message': 'Internal server error'
             }))
 
+
+    @database_sync_to_async
+    def processAIResponse(self, lastMessage, message_data, group_id):
+        # Synchronous database operations go here
+        # Remove the asyncio.sleep and async/await syntax
+        message_data['id']=str(uuid.uuid4())
+        return message_data
+
+    async def handle_ai_response(self, lastMessage, message_data, group_id):
+        # This is where you put your async operations
+        await asyncio.sleep(5)
+        processed_data = await self.processAIResponse(lastMessage, message_data, group_id)
+        await self.channel_layer.group_send(
+            self.chat_group,
+            {
+                'type': 'chat_message',
+                'message': processed_data
+            }
+        )
+
+
+
+
+      
     @database_sync_to_async
     def verify_membership(self):
         """Verify user is an active member of the group"""
@@ -922,7 +969,6 @@ class GroupChatConsumer(BaseChatConsumer):
                 groupmembership__left_at__isnull=True
             ).distinct()
 
-            print("message",active_members,data)
             
             # Bulk create receipts
             receipts = [
@@ -1017,8 +1063,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         }))
 
 def validate_message_data( message_type, data):
-        """Validate message data based on message type"""
-        print("data",data)
+     
         try:
             if message_type == MessageType.TEXT:
                 return bool(data.get('text'))

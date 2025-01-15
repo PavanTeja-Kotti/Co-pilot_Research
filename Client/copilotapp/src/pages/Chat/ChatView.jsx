@@ -7,10 +7,10 @@ import {
   List,
   Space,
   Upload,
-  Input,
   theme,
   message as antMessage,
   Popconfirm,
+  Mentions
 } from "antd";
 import {
   ArrowLeftOutlined,
@@ -21,12 +21,10 @@ import {
 } from "@ant-design/icons";
 import MessageBubble from "./MessageBubble";
 import { chatapi, webSocket } from "../../utils/socket";
-import api from "../../utils/api";
 import { useAuth } from "../../utils/auth";
 
 const { useToken } = theme;
 const { Text } = Typography;
-const { TextArea } = Input;
 
 const ALLOWED_FILE_TYPES = [
   "image/*",
@@ -58,6 +56,37 @@ const ChatView = ({
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const lastMessageCountRef = useRef(chat.messages.length);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
+  const [mentionOptions, setMentionOptions] = useState([]);
+
+  // Handle member search for mentions
+  const onSearch = (searchValue, prefix) => {
+
+   
+    if (prefix === '@') {
+      const filteredMembers = chat.members.filter(member => {
+        const displayName = member.username;
+        return displayName.toLowerCase().includes(searchValue.toLowerCase());
+      });
+      
+      setMentionOptions(filteredMembers.map(member => {
+        const displayName = member.username;
+        return {
+          key: member.id,
+          value: displayName, // This is what gets inserted into the input
+          label: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Avatar size="small">
+                {displayName[0].toUpperCase()}
+              </Avatar>
+              <span>{displayName}</span>
+            </div>
+          )
+        };
+      }));
+
+   
+    }
+  };
 
   // Handle scroll events
   const handleScroll = useCallback((e) => {
@@ -67,7 +96,7 @@ const ChatView = ({
     setShouldAutoScroll(isScrolledNearBottom);
   }, []);
 
-  // Auto-scroll logic
+  // Initial scroll to bottom
   useEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer || !chat.messages.length) return;
@@ -77,6 +106,7 @@ const ChatView = ({
     }, 0);
   }, []);
 
+  // Auto-scroll on new messages
   useEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer) return;
@@ -90,7 +120,7 @@ const ChatView = ({
     lastMessageCountRef.current = chat.messages.length;
   }, [chat.messages, shouldAutoScroll]);
 
-  // Chat connection
+  // Chat connection management
   useEffect(() => {
     const initializeChat = async () => {
       try {
@@ -120,7 +150,7 @@ const ChatView = ({
     };
   }, [chat.id, chat.type]);
 
-  // Message handling
+  // Message websocket handling
   const handleMessage = useCallback(
     (data) => {
       onSendMessage(data, chat.id, chat.type);
@@ -136,14 +166,50 @@ const ChatView = ({
     return () => unsubscribe();
   }, [handleMessage, chat.type]);
 
+  // Extract mentions from message
+  const extractMentions = (text) => {
+    const mentions = [];
+    const regex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+    let match;
+    
+    while ((match = regex.exec(text)) !== null) {
+      mentions.push({
+        name: match[1],
+        id: match[2]
+      });
+    }
+    
+    return mentions;
+  };
+
+  // Handle sending messages
   const handleSendMessage = async () => {
     if (!message.trim()) return;
 
     try {
+      // Get mention data directly from the message
+      const mentions = [];
+      const regex = /@(\w+)\s/g;
+      let match;
+      
+      while ((match = regex.exec(message)) !== null) {
+        const mentionedName = match[1];
+        const mentionedUser = chat.members.find(member => 
+          (member.username) === mentionedName
+        );
+        
+        if (mentionedUser) {
+          mentions.push({
+            name: mentionedName,
+            id: mentionedUser.id
+          });
+        }
+      }
+
       if (chat.type === "group") {
-        await chatapi.sendGroupMessage(chat.id, message.trim());
+        await chatapi.sendGroupMessage(chat.id,  message.trim(),'TEXT', null,mentions);
       } else {
-        await chatapi.sendChatMessage(chat.id, message.trim());
+        await chatapi.sendChatMessage(chat.id,  message.trim() ,'TEXT', null,mentions);
       }
       setMessage("");
     } catch (error) {
@@ -152,16 +218,22 @@ const ChatView = ({
     }
   };
 
+  // Handle file uploads
   const handleFileUpload = async (file) => {
-    // if (file.size > MAX_FILE_SIZE) {
-    //   antMessage.error('File size should not exceed 50MB');
-    //   return;
-    // }
+    if (file.size > MAX_FILE_SIZE) {
+      antMessage.error('File size should not exceed 50MB');
+      return;
+    }
 
-    // if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-    //   antMessage.error('File type not supported');
-    //   return;
-    // }
+    if (!ALLOWED_FILE_TYPES.some(type => {
+      if (type.endsWith('/*')) {
+        return file.type.startsWith(type.slice(0, -2));
+      }
+      return type === file.type;
+    })) {
+      antMessage.error('File type not supported');
+      return;
+    }
 
     const tempMessageId = `upload-${Date.now()}`;
 
@@ -229,8 +301,7 @@ const ChatView = ({
     }
   };
 
-  console.log(chat);
-
+  // Render message list
   const renderMessages = () => {
     const uploadingMessages = Array.from(uploadingFiles.entries()).map(
       ([id, data]) => ({
@@ -248,8 +319,6 @@ const ChatView = ({
     const allMessages = [...chat.messages, ...uploadingMessages].sort(
       (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
     );
-
-    // Continuing from the previous ChatView code...
 
     return (
       <List
@@ -313,21 +382,17 @@ const ChatView = ({
 
         <Popconfirm
           title="Are you sure to delete this chat?"
-          onConfirm={async () =>{
-            
-            if(chat.type === "group") {
+          onConfirm={async () => {
+            if (chat.type === "group") {
               await chatapi.deleteGroup(chat.id);
-            }
-            else {
+            } else {
               await chatapi.deleteChat(chat.id);
             }
           }}
-
-           
           okText="Yes"
           cancelText="No"
         >
-          <Button icon={<DeleteOutlined style={{ color: "red" }} />}></Button>
+          <Button icon={<DeleteOutlined style={{ color: "red" }} />} />
         </Popconfirm>
       </div>
 
@@ -344,31 +409,31 @@ const ChatView = ({
       >
         <style>
           {`
-        .custom-scroll::-webkit-scrollbar {
-          width: 1px;
-          background-color: transparent;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
-          background-color: ${token.colorTextQuaternary};
-          border-radius: 20px;
-        }
-        .custom-scroll::-webkit-scrollbar-track {
-          background-color: ${token.colorBgContainer};
-        }
-        .custom-scroll:hover::-webkit-scrollbar-thumb {
-          background-color: ${token.colorTextTertiary};
-        }
-        .custom-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: ${token.colorTextQuaternary} transparent;
-        }
-        .custom-scroll:hover {
-          scrollbar-color: ${token.colorTextTertiary} transparent;
-        }
-        .custom-scroll::-webkit-scrollbar-thumb {
-          transition: background-color 0.2s;
-        }
-      `}
+            .custom-scroll::-webkit-scrollbar {
+              width: 1px;
+              background-color: transparent;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb {
+              background-color: ${token.colorTextQuaternary};
+              border-radius: 20px;
+            }
+            .custom-scroll::-webkit-scrollbar-track {
+              background-color: ${token.colorBgContainer};
+            }
+            .custom-scroll:hover::-webkit-scrollbar-thumb {
+              background-color: ${token.colorTextTertiary};
+            }
+            .custom-scroll {
+              scrollbar-width: thin;
+              scrollbar-color: ${token.colorTextQuaternary} transparent;
+            }
+            .custom-scroll:hover {
+              scrollbar-color: ${token.colorTextTertiary} transparent;
+            }
+            .custom-scroll::-webkit-scrollbar-thumb {
+              transition: background-color 0.2s;
+            }
+          `}
         </style>
 
         {renderMessages()}
@@ -390,7 +455,7 @@ const ChatView = ({
               handleFileUpload(file);
               return false;
             }}
-            // accept={ALLOWED_FILE_TYPES.join(',')}
+            accept={ALLOWED_FILE_TYPES.join(',')}
           >
             <Button
               icon={<PaperClipOutlined />}
@@ -402,16 +467,18 @@ const ChatView = ({
               }}
             />
           </Upload>
-          <TextArea
+          <Mentions
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={setMessage}
+            onSearch={onSearch}
+            options={mentionOptions}
             onKeyPress={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleSendMessage();
               }
             }}
-            placeholder="Type a message..."
+            placeholder="Type @ to mention someone"
             autoSize={{ minRows: 1, maxRows: 4 }}
             style={{
               flex: 1,
@@ -434,6 +501,7 @@ const ChatView = ({
               border: "none",
               padding: "0 16px",
               borderRadius: "20px",
+              
             }}
           />
         </Space.Compact>

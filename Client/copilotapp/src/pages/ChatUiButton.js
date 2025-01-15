@@ -186,11 +186,14 @@ const ChatUI = () => {
 
  
     if (data.type === 'chat_deleted') {
-
       setChats(prevChats => prevChats.filter(chat => chat.id !== data.chat_id && chat.type !='private'));
       setSelectedChat(null)
 
-      
+    }
+
+    if (data.type === 'group_deleted') {
+      setChats(prevChats => prevChats.filter(chat => chat.id !== data.group_id && chat.type !='group'));
+      setSelectedChat(null)
     }
 
     if (data.type === 'chats_list') {

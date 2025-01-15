@@ -15,6 +15,7 @@ import {
 import MessageBubble from "./MessageBubble";
 import { styles } from "./styles";
 import { chatapi } from "../../utils/socket";
+import { useAuth } from "../../utils/auth";
 
 const { TextArea } = Input;
 const { useToken } = theme;
@@ -30,6 +31,8 @@ const Chat = ({ uniqueID }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isWaitingForAI, setIsWaitingForAI] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [uploadingFiles, setUploadingFiles] = useState(new Map());
+  const { uploadFile } = useAuth();
 
   // Helper functions for session storage
   const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;
@@ -158,59 +161,85 @@ const Chat = ({ uniqueID }) => {
     }
   };
 
-  const handleFileUpload = async (file) => {
-    if (!isConnected || isLoading || isWaitingForAI) {
-      message.error("Cannot upload file at this time");
-      return false;
-    }
+const handleFileUpload = async (file) => {
+    // if (file.size > MAX_FILE_SIZE) {
+    //   antMessage.error('File size should not exceed 50MB');
+    //   return;
+    // }
 
-    const isImage = file.type.startsWith("image/");
-    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    // if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+    //   antMessage.error('File type not supported');
+    //   return;
+    // }
 
-    if (fileSizeMB > 5) {
-      message.error("File size should not exceed 5MB");
-      return false;
-    }
+    const tempMessageId = `upload-${Date.now()}`;
 
     try {
-      setIsLoading(true);
-      setIsWaitingForAI(true);
-      
-      const reader = new FileReader();
+      setUploadingFiles((prev) =>
+        new Map(prev).set(tempMessageId, {
+          file,
+          progress: 0,
+          status: "uploading",
+        })
+      );
 
-      reader.onload = async (e) => {
-        const base64Content = e.target.result;
+      const result = await uploadFile(file, (progress) => {
+        setUploadingFiles((prev) =>
+          new Map(prev).set(tempMessageId, {
+            file,
+            progress,
+            status: "uploading",
+          })
+        );
+      });
 
-        await chatapi.sendAIChatMessage({
-          text: `Uploaded file: ${file.name}`,
-          message_type: "TEXT",
-          session_id: sessionId,
-          content: {
-            filename: file.name,
-            content: base64Content,
-            fileType: file.type,
-            fileSize: fileSizeMB,
-            type: isImage ? "image" : "file",
-            url: isImage ? URL.createObjectURL(file) : null,
-          },
+      setUploadingFiles((prev) =>
+        new Map(prev).set(tempMessageId, {
+          file,
+          progress: 100,
+          status: "done",
+          result,
+        })
+      );
+
+      await chatapi.sendAIChatMessage({
+        text: "ajshajkshjk",
+        message_type: result.type,
+        content: {},
+        session_id: sessionId,
+        file:result,
+      });
+      setInputMessage("");
+      ///to do
+    
+      setTimeout(() => {
+        setUploadingFiles((prev) => {
+          const next = new Map(prev);
+          next.delete(tempMessageId);
+          return next;
         });
-      };
-
-      reader.onerror = () => {
-        message.error("Failed to read file");
-        setIsLoading(false);
-        setIsWaitingForAI(false);
-      };
-
-      reader.readAsDataURL(file);
+      }, 1000);
     } catch (error) {
       console.error("Failed to upload file:", error);
       message.error("Failed to upload file");
-      setIsLoading(false);
-      setIsWaitingForAI(false);
-    }
 
-    return false;
+      setUploadingFiles((prev) =>
+        new Map(prev).set(tempMessageId, {
+          file,
+          progress: 0,
+          status: "error",
+          error: error.message,
+        })
+      );
+
+      setTimeout(() => {
+        setUploadingFiles((prev) => {
+          const next = new Map(prev);
+          next.delete(tempMessageId);
+          return next;
+        });
+      }, 5000);
+    }
   };
 
   // Initialize chat connection
@@ -390,8 +419,9 @@ const Chat = ({ uniqueID }) => {
               height: "auto",
               borderRadius: "20px",
               padding: "0 16px",
-              backgroundColor: "#8B5CF6",
+              // backgroundColor: "#8B5CF6",
               border: "none",
+              backgroundColor: token.colorPrimary,
             }}
             disabled={!isConnected || isLoading || isWaitingForAI || !inputMessage.trim()}
             loading={isLoading}
