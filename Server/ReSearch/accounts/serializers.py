@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from .models import Notification, NotificationType
+from .models import Notification, NotificationType, AccountType
 
 User = get_user_model()
 
@@ -30,15 +30,16 @@ class NotificationDetailSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     unread_notifications_count = serializers.SerializerMethodField()
     notifications = NotificationSerializer(many=True, read_only=True)
+    account_type = serializers.ChoiceField(choices=AccountType.choices, read_only=True)
 
     class Meta:
         model = User
         fields = (
             'id', 'email', 'username', 'first_name', 'last_name',
             'profile_image', 'bio', 'first_login', 'last_login_at',
-            'unread_notifications_count', 'notifications'
+            'unread_notifications_count', 'notifications', 'account_type'
         )
-        read_only_fields = ('id', 'first_login', 'last_login_at')
+        read_only_fields = ('id', 'first_login', 'last_login_at', 'account_type')
 
     def get_unread_notifications_count(self, obj):
         return obj.get_unread_notifications_count()
@@ -46,12 +47,13 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
+    account_type = serializers.ChoiceField(choices=AccountType.choices, default=AccountType.PERSON)
 
     class Meta:
         model = User
         fields = (
             'id', 'email', 'username', 'password', 'password_confirm',
-            'first_name', 'last_name', 'profile_image', 'bio'
+            'first_name', 'last_name', 'profile_image', 'bio', 'account_type'
         )
         read_only_fields = ('id',)
 
@@ -77,10 +79,11 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 class UpdateUserSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(read_only=True)
+    account_type = serializers.ChoiceField(choices=AccountType.choices, read_only=True)
     
     class Meta:
         model = User
-        fields = ('email', 'first_name', 'last_name', 'profile_image', 'bio', 'username')
+        fields = ('email', 'first_name', 'last_name', 'profile_image', 'bio', 'username', 'account_type')
         
     def validate_profile_image(self, value):
         if value:
@@ -96,15 +99,21 @@ class UpdateUserSerializer(serializers.ModelSerializer):
 
 class AdminUpdateUserSerializer(serializers.ModelSerializer):
     notifications = NotificationSerializer(many=True, read_only=True)
+    account_type = serializers.ChoiceField(choices=AccountType.choices)
 
     class Meta:
         model = User
         fields = (
             'email', 'first_name', 'last_name', 'profile_image', 'bio',
             'is_active', 'is_staff', 'username', 'first_login', 'last_login_at',
-            'notifications'
+            'notifications', 'account_type'
         )
         read_only_fields = ('last_login_at', 'first_login')
+
+    def validate_account_type(self, value):
+        if value not in AccountType.values:
+            raise ValidationError(f"Invalid account type. Must be one of: {', '.join(AccountType.values)}")
+        return value
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()

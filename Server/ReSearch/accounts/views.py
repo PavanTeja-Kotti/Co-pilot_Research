@@ -176,9 +176,13 @@ def search(request, query=None):
             Q(username__icontains=query) | 
             Q(first_name__icontains=query),
             is_active=True
-        ).exclude(id=request.user.id).distinct()
+        ).exclude(id=request.user.id ).exclude(
+            email='bot@gmail.com'
+        )  .distinct()
     else:
-        users = User.objects.filter(is_active=True).exclude(id=request.user.id)[:20]  # Return 20 users if no query
+        users = User.objects.filter(is_active=True).exclude(id=request.user.id).exclude(
+            email='bot@gmail.com'
+        )[:20]  # Return 20 users if no query
 
     user_data = list(users.values(
         'id', 'email', 'username', 'first_name', 'last_name', 

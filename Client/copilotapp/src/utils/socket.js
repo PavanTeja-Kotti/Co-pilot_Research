@@ -524,11 +524,15 @@ class ChatAPI {
         await this.ws.disconnect('chat', chatId);
     }
 
-    async sendChatMessage(chatId, text, messageType = 'TEXT', content =null) {
+    async sendChatMessage(chatId, text, messageType = 'TEXT', content =null, mention =null) {
         return this.ws.send('chat', chatId, {
             text,
             message_type: messageType,
-            file: content
+            file: content,
+            mention
+            
+            
+            
 
         });
     }
@@ -542,11 +546,13 @@ class ChatAPI {
         await this.ws.disconnect('group', groupId);
     }
 
-    async sendGroupMessage(groupId, text, messageType = 'TEXT',content =null) {
+    async sendGroupMessage(groupId, text, messageType = 'TEXT',content =null,mention =null) {
         return this.ws.send('group', groupId, {
             text,
             message_type: messageType,
-            file: content
+            file: content,
+            mention
+            
         });
     }
 

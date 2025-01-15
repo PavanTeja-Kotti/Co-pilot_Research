@@ -18,6 +18,11 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(email, username, password, **extra_fields)
 
+class AccountType(models.TextChoices):
+    """Enum for different types of accounts"""
+    PERSON = 'PERSON', 'Person Account'
+    BOT = 'BOT', 'Bot Account'
+
 class NotificationType(models.TextChoices):
     """Enum for different types of notifications"""
     SYSTEM = 'SYSTEM', 'System Notification'
@@ -52,6 +57,12 @@ class User(AbstractUser):
     bio = models.TextField(blank=True, null=True, help_text="User biography")
     last_login_at = models.DateTimeField(null=True, blank=True)
     first_login = models.BooleanField(default=True)
+    account_type = models.CharField(
+        max_length=20,
+        choices=AccountType.choices,
+        default=AccountType.PERSON,
+        help_text="Type of account (Person or Bot)"
+    )
 
     objects = UserManager()
 
