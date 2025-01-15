@@ -553,6 +553,7 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error removing members from group: {str(e)}")
             return False, None
+
 class ChatConsumer(BaseChatConsumer):
     """Consumer for private chats"""
     
@@ -1015,10 +1016,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'notification': event['notification']
         }))
 
-
-
-
-
 def validate_message_data( message_type, data):
         """Validate message data based on message type"""
         print("data",data)
@@ -1057,4 +1054,3 @@ def validate_message_data( message_type, data):
         except Exception as e:
             logger.error(f"Error validating message data: {str(e)}")
             return False
-
