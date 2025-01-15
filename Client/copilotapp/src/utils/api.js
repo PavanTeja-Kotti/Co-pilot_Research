@@ -183,6 +183,68 @@ class BaseService {
     }
 }
 
+
+class ScrapingService {
+    constructor(baseService) {
+        this.baseService = baseService;
+        this.endpoint = '/scraping';
+    }
+
+    // Get papers with pagination and filters
+    async getPapers(offset = 0, limit = 10, filters = {}) {
+        // Build query parameters
+        const queryParams = new URLSearchParams();
+        
+        // Add pagination params
+        queryParams.append('offset', offset);
+        queryParams.append('limit', limit);
+        
+        // Add filters only if they have values
+        if (filters.search?.trim()) {
+            queryParams.append('search', filters.search.trim());
+        }
+        
+        if (filters.category?.trim()) {
+            queryParams.append('categories', filters.category.trim());
+        }
+        
+        if (filters.source?.trim()) {
+            queryParams.append('source', filters.source.trim());
+        }
+
+        // Make the request
+        return this.baseService.request(
+            `${this.endpoint}/papers/?${queryParams.toString()}`,
+            { method: 'GET' }
+        );
+    }
+
+    // Get paper details
+    async getPaperDetails(paperId) {
+        return this.baseService.request(
+            `${this.endpoint}/papers/${paperId}/`,
+            { method: 'GET' }
+        );
+    }
+
+    // Toggle bookmark status
+    async toggleBookmark(paperId) {
+        return this.baseService.request(
+            `${this.endpoint}/papers/${paperId}/bookmark/`,
+            { method: 'POST' }
+        );
+    }
+
+    // Get paper summarization
+    async getPaperSummarization(url) {
+        const encodedUrl = encodeURIComponent(url);
+        return this.baseService.request(
+            `${this.endpoint}/papers/summarization/${encodedUrl}/`,
+            { method: 'GET' }
+        );
+    }
+}
+
 class AccountsService {
     constructor(baseService) {
         this.baseService = baseService;
@@ -365,14 +427,7 @@ class AccountsService {
     }
 }
 
-class ScrapingService{
-    constructor(baseService){
-        this.baseService = baseService;
-        this.endpoint = '/scraping';
-    }
 
-    
-}
 
 class CategoryService extends ScrapingService {
 

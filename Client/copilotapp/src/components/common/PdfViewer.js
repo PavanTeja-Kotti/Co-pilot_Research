@@ -8,6 +8,7 @@ import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs`;
 
 const PdfViewer = ({ pdfUrl }) => {
+  console.log(pdfUrl)
   const defaultLayoutPluginInstance = defaultLayoutPlugin();
 
   return (

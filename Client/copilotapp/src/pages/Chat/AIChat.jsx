@@ -419,8 +419,9 @@ const handleFileUpload = async (file) => {
               height: "auto",
               borderRadius: "20px",
               padding: "0 16px",
-              backgroundColor: "#8B5CF6",
+              // backgroundColor: "#8B5CF6",
               border: "none",
+              backgroundColor: token.colorPrimary,
             }}
             disabled={!isConnected || isLoading || isWaitingForAI || !inputMessage.trim()}
             loading={isLoading}

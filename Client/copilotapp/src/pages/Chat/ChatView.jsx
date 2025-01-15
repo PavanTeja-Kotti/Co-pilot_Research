@@ -501,6 +501,7 @@ const ChatView = ({
               border: "none",
               padding: "0 16px",
               borderRadius: "20px",
+              
             }}
           />
         </Space.Compact>
