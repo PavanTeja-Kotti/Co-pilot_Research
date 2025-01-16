@@ -132,7 +132,7 @@ const ResearchPapers = () => {
     e.stopPropagation();
     try {
       const response = await api.scraping().toggleBookmark(paperId);
-      console.log(response);
+     
       if (response.success) {
         setPapers(prev => prev.map(paper => 
           paper.id === paperId 
@@ -365,7 +365,7 @@ const ResearchPapers = () => {
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         {renderSearchBar()}
 
-        {loading ? (
+        {loading ||searching ? (
           Array(3).fill().map((_, i) => (
             <div key={i}>{renderSkeletonCard()}</div>
           ))

@@ -71,21 +71,18 @@ def research_paper_list(request):
     if request.method == 'GET':
         queryset = ResearchPaper.objects.all()
         filtered_queryset = apply_filters(queryset, request)
-        
-        # Initialize paginator
+       
         paginator = ResearchPaperPagination()
         
-        # Paginate queryset
+        
         paginated_queryset = paginator.paginate_queryset(filtered_queryset, request)
         
-        # Serialize paginated data
         serializer = ResearchPaperSerializer(
             paginated_queryset, 
             many=True, 
             context={'request': request}
         )
         
-        # Return paginated response
         return paginator.get_paginated_response(serializer.data)
     
     elif request.method == 'POST':
