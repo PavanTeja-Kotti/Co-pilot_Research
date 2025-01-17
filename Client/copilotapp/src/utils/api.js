@@ -728,13 +728,19 @@ class GeneralService {
                 reject(this.baseService.formatResponse(false, null, 'Download failed', 'Network error'));
             });
     
-            // Open and send the request
-            xhr.open('GET', `${this.baseService.baseURL}${this.endpoint}/files/${filePath}`);
+            // Determine if the URL is external (starts with http:// or https://)
+            const isExternalUrl = filePath.toLowerCase().startsWith('http');
+            const url = isExternalUrl ? filePath : `${this.baseService.baseURL}${this.endpoint}/files/${filePath}`;
             
-            // Add authorization header
-            const authHeader = this.baseService.getAuthHeader();
-            if (authHeader.Authorization) {
-                xhr.setRequestHeader('Authorization', authHeader.Authorization);
+            // Open and send the request
+            xhr.open('GET', url);
+            
+            // Add authorization header only for internal URLs
+            if (!isExternalUrl) {
+                const authHeader = this.baseService.getAuthHeader();
+                if (authHeader.Authorization) {
+                    xhr.setRequestHeader('Authorization', authHeader.Authorization);
+                }
             }
     
             xhr.send();

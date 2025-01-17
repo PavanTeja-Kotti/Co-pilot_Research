@@ -61,6 +61,8 @@ class BookmarkedPaper(models.Model):
     def soft_delete(self):
         self.is_active = False
         self.save()
+    def hard_delete(self):
+        super().delete()
 
 class ResearchPaperCategory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

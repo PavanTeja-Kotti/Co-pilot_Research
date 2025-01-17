@@ -256,7 +256,7 @@ def toggle_bookmark(request, pk):
     ).first()
     
     if bookmark:
-        bookmark.soft_delete()
+        bookmark.hard_delete()
         return Response({'status': 'unbookmarked'})
     else:
         bookmark = BookmarkedPaper.objects.create(

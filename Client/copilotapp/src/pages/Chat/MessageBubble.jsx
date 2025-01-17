@@ -553,7 +553,7 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
 };
 
 // MessageBubble Component
-const MessageBubble = ({ message, type = 'private' }) => {
+const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
   const { user, downloadFile } = useAuth();
   const sender = message.sender;
   const isOwnMessage = sender?.id === user?.id;
@@ -608,7 +608,7 @@ const MessageBubble = ({ message, type = 'private' }) => {
 
   return (
     <div style={{
-      textAlign: isOwnMessage ? 'right' : 'left',
+      textAlign: !isOwnMessage ||Aichat ? 'left' : 'right',
       marginBottom: 12,
       padding: '0 12px'
     }}>

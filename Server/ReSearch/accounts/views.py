@@ -6,6 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from .serializers import (
     UserSerializer, 
     RegisterSerializer, 
@@ -75,9 +77,19 @@ def login(request):
 @permission_classes([IsAuthenticated])
 def logout(request):
     try:
+        user_id = request.user.id
         refresh_token = request.data["refresh_token"]
         token = RefreshToken(refresh_token)
         token.blacklist()
+        channel_layer = get_channel_layer()
+    
+    # Call cleanup on the consumer
+        async_to_sync(channel_layer.group_send)(
+            f'ai_chat_{user_id}',
+            {
+                'type': 'cleanup_on_logout'
+            }
+        )
         return Response({
             'message': 'Logged out successfully'
         })

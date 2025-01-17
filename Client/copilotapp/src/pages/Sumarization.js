@@ -234,7 +234,7 @@ const ResearchPapers = () => {
           borderRadius: token.borderRadiusLG,
           // padding: 16
         }}>
-          <AIChat uniqueID={paper.id} />
+          <AIChat uniqueID={paper.id}  paper={paper} />
         </div>
         <div style={{ 
           flex: 1,

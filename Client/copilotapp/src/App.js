@@ -12,6 +12,7 @@ import {InterestPage} from './pages/InterestPage';
 import {chatapi} from './utils/socket';
 import Sumarization from './pages/Sumarization';
 import BulkUploadChat from './pages/BulkUploadChat';
+import Dashboard from './pages/Dashboard';
 
 const PublicRoute = ({ children }) => {
   const { user } = useAuth();
@@ -63,7 +64,7 @@ const App = () => {
         <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index path="/" element={<HomePage />} />
           <Route path="/interest" element={<InterestPage />} />
-          <Route path="/dashboard" element={<h1>sdsdeeee</h1>} />
+          <Route path="/dashboard" element={<h1><Dashboard /></h1>} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/summarization" element={<Sumarization />} />
           <Route path="/bulkchat" element={<BulkUploadChat />} />

@@ -213,32 +213,34 @@ export const AuthProvider = ({ children }) => {
 
   const updateCategoryList = async (accumulatedState) => {
     try {
+      // Extract current liked categories, ensuring we handle potentially undefined values
       const currentLikedCategories = user?.category_like_list
-        ?.filter(item => item?.id)
+        ?.filter(item => item?.id !== undefined && item?.id !== null)
         ?.map(item => item.id) || [];
         
       const categoriesToLike = [];
       const categoriesToUnlike = [];
   
+      // Process each category ID and its click count
       Object.entries(accumulatedState).forEach(([id, clicks]) => {
-        const categoryId = Number(id);
-        const isCurrentlyLiked = currentLikedCategories.includes(categoryId);
+        // No need to convert ID to number since we want to support any ID type
+        const isCurrentlyLiked = currentLikedCategories.includes(id);
         
         if (isCurrentlyLiked) {
           if (clicks % 2 === 1) {
-            categoriesToUnlike.push(categoryId);
+            categoriesToUnlike.push(id);
           }
         } else {
           if (clicks % 2 === 1) {
-            categoriesToLike.push(categoryId);
+            categoriesToLike.push(id);
           }
         }
       });
   
-      const combinedlikeandUnlike = [...categoriesToLike, ...categoriesToUnlike];
+      const combinedLikeAndUnlike = [...categoriesToLike, ...categoriesToUnlike];
       
-      if (combinedlikeandUnlike.length > 0) {
-        const response = await api.categories().updateCategoryLikeList(combinedlikeandUnlike);
+      if (combinedLikeAndUnlike.length > 0) {
+        const response = await api.categories().updateCategoryLikeList(combinedLikeAndUnlike);
         await category_like_list();
         showSuccess('Categories updated successfully');
         return response;
