@@ -231,6 +231,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             session_id = data.get('session_id')
+            print("session: ", session_id)
             message_type = data.get('message_type', MessageType.TEXT.value)
 
             if not consumers.validate_message_data(message_type, data):
@@ -249,23 +250,25 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                     'message': 'New chat session created successfully'
                 })
 
-            message = await self.save_message(data, session_id, is_ai=False)
-            if message:
-                chat_session = self.active_chats[str(self.user.id)][session_id]
-                chat_session["lastMessage"] = message["text_content"]
-                chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+            # message = await self.save_message(data, session_id, is_ai=False)
+            print("data: ", data['text'])
+            await self.send(data['text'])
+            # if message:
+            #     chat_session = self.active_chats[str(self.user.id)][session_id]
+            #     chat_session["lastMessage"] = message["text_content"]
+            #     chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
                 
-                await self.channel_layer.group_send(
-                    self.user_channel,
-                    {
-                        'type': 'chat_message',
-                        'session_id': session_id,
-                        'message': message,
-                        'is_ai': False
-                    }
-                )
+            #     await self.channel_layer.group_send(
+            #         self.user_channel,
+            #         {
+            #             'type': 'chat_message',
+            #             'session_id': session_id,
+            #             'message': message,
+            #             'is_ai': False
+            #         }
+            #     )
                 
-                asyncio.create_task(self.process_ai_response(message['text_content'], session_id))
+            #     asyncio.create_task(self.process_ai_response(message['text_content'], session_id))
                 
         except json.JSONDecodeError:
             logger.error("Invalid JSON in chat message")
@@ -332,7 +335,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         try:
             chat_session = self.active_chats[str(self.user.id)][session_id]
             recent_messages = chat_session.get("messages", [])[-5:]
-            
+            print("recent_messages : ", recent_messages)
             ai_response = await self.ai_model.generate_response(user_message, recent_messages)
             typing_delay = 1 + (len(ai_response) / 100)
             await asyncio.sleep(typing_delay)

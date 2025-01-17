@@ -32,4 +32,8 @@ websocket_urlpatterns = [
         consumers.NotificationConsumer.as_asgi(),
         name='notifications'
     ),
+    re_path(r'^ws/projectchat/$', 
+        consumers.DiffChatConsumer.as_asgi(),
+        name='projectchat'
+    ),
 ]

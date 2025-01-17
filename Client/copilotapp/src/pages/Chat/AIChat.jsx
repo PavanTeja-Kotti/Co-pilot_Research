@@ -49,7 +49,6 @@ const Chat = ({ uniqueID }) => {
       lastUpdated: new Date().toISOString()
     }));
 
-   
   };
 
   const loadFromSessionStorage = (sessionId) => {

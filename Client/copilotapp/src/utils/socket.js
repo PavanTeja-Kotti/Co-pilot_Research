@@ -1,5 +1,4 @@
 import api from "./api";
-
 class WebSocketService {
     constructor(baseUrl) {
         this.baseUrl = baseUrl || api.baseURL.replace('http://', '');
