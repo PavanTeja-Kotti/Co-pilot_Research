@@ -222,7 +222,7 @@ const AppLayout = () => {
                             fontWeight: 600
                         }}
                     >
-                        State Street
+                        Tech Titans
                     </Title>
                 </Link>
 

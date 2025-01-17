@@ -24,6 +24,162 @@ const { Text } = Typography;
 const fileCache = new Map();
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+
+const RichContent = ({ content }) => {
+  // Helper function to detect if content contains HTML
+  const containsHTML = (str) => /<[a-z][\s\S]*>/i.test(str);
+  
+  // Helper function to detect if content is a table structure
+  const isTableStructure = (str) => {
+    try {
+      const data = JSON.parse(str);
+      return Array.isArray(data) && data.every(row => typeof row === 'object');
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper function to detect if content is a list (numbered or bullet points)
+  const isList = (str) => {
+    const listPattern = /^(\d+\.|[\*\-])\s/m;
+    return listPattern.test(str);
+  };
+
+  // Helper function to detect code blocks
+  const isCodeBlock = (str) => {
+    return str.startsWith('```') || str.includes('class ') || str.includes('function ');
+  };
+
+  // Handle different types of content
+  const renderContent = () => {
+    if (typeof content !== 'string') {
+      return <Text color='inherit' >{JSON.stringify(content)}</Text>;
+    }
+
+    // Handle HTML content
+    if (containsHTML(content)) {
+      return (
+        <div 
+          dangerouslySetInnerHTML={{ __html: content }}
+          style={{
+            color: 'inherit',
+            maxWidth: '100%',
+            overflow: 'auto'
+          }}
+        />
+      );
+    }
+
+    // Handle table structure
+    if (isTableStructure(content)) {
+      try {
+        const tableData = JSON.parse(content);
+        return (
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                {Object.keys(tableData[0]).map((header, index) => (
+                  <th key={index} style={{ 
+                    border: '1px solid #ddd',
+                    padding: '8px',
+                    backgroundColor: '#f5f5f5'
+                  }}>
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableData.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {Object.values(row).map((cell, cellIndex) => (
+                    <td key={cellIndex} style={{ 
+                      border: '1px solid #ddd',
+                      padding: '8px'
+                    }}>
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      } catch {
+        return <Text color='inherit'>{content}</Text>;
+      }
+    }
+
+    // Handle lists
+    if (isList(content)) {
+      const lines = content.split('\n');
+      return (
+        <div style={{ paddingLeft: '20px' }}>
+          {lines.map((line, index) => {
+            const isNumbered = /^\d+\.\s/.test(line);
+            const isBullet = /^[\*\-]\s/.test(line);
+            
+            if (isNumbered || isBullet) {
+              return (
+                <div key={index} style={{ 
+                  marginBottom: '8px',
+                  display: 'flex' 
+                }}>
+                  <span style={{ color:'inherit',marginRight: '8px' }}>
+                    {isNumbered ? line.match(/^\d+\./)[0] : '•'}
+                  </span>
+                  <span >{line.replace(/^(\d+\.|\*|\-)\s/, '')}</span>
+                </div>
+              );
+            }
+            return <div style={{color:'inherit'}} key={index}>{line}</div>;
+          })}
+        </div>
+      );
+    }
+
+    // Handle code blocks
+    if (isCodeBlock(content)) {
+      return (
+        <pre style={{
+          backgroundColor: '#f5f5f5',
+          padding: '12px',
+          borderRadius: '4px',
+          overflowX: 'auto',
+          fontFamily: 'monospace',
+          color:'inherit'
+        }}>
+          <code>{content.replace(/^```\w*\n?/, '').replace(/```$/, '')}</code>
+        </pre>
+      );
+    }
+
+    // Handle markdown-style text formatting
+    if (content.includes('**') || content.includes('*') || content.includes('_')) {
+      return content.split(/(\*\*.*?\*\*|\*.*?\*|_.*?_)/).map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong  key={index}>{part.slice(2, -2)}</strong>;
+        }
+        if ((part.startsWith('*') && part.endsWith('*')) || 
+            (part.startsWith('_') && part.endsWith('_'))) {
+          return <em key={index}>{part.slice(1, -1)}</em>;
+        }
+        return part;
+      });
+    }
+
+    // Default text rendering
+    return <Text style={{color:'inherit'}}>{content}</Text>;
+  };
+
+  return (
+    <div style={{ maxWidth: '100%', overflow: 'hidden',color:'inherit' }}>
+      {renderContent()}
+    </div>
+  );
+};
+
 // Custom hook for intersection observer
 const useIntersectionObserver = (options = {}) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -596,12 +752,12 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
         display: 'inline-block',
         padding: '10px 12px',
         backgroundColor: isOwnMessage ? '#1677ff' : '#ffffff',
-        color: isOwnMessage ? '#ffffff' : '#000000',
+      color: isOwnMessage ? '#ffffff' : '#000000',
         borderRadius: 16,
         fontSize: 14,
         wordBreak: 'break-word'
       }}>
-        {message.text_content}
+       <RichContent  content={message.text_content} />
       </Text>
     );
   };
