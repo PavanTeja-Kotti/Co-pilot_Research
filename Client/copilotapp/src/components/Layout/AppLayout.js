@@ -245,6 +245,11 @@ const AppLayout = () => {
                             key: '/summarization',
                             icon: <AppstoreOutlined />,
                             label: <Link to="/summarization">summarization</Link>
+                        },
+                        {
+                            key: '/bulkchat',
+                            icon: <AppstoreOutlined />,
+                            label: <Link to="/bulkchat">bulkchat</Link>
                         }
                     ]}
                 />

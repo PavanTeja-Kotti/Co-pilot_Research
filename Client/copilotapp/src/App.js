@@ -11,6 +11,7 @@ import PrivateRoute from './components/common/PrivateRoute';
 import {InterestPage} from './pages/InterestPage';
 import {chatapi} from './utils/socket';
 import Sumarization from './pages/Sumarization';
+import BulkUploadChat from './pages/BulkUploadChat';
 
 const PublicRoute = ({ children }) => {
   const { user } = useAuth();
@@ -65,6 +66,7 @@ const App = () => {
           <Route path="/dashboard" element={<h1>sdsdeeee</h1>} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/summarization" element={<Sumarization />} />
+          <Route path="/bulkchat" element={<BulkUploadChat />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
