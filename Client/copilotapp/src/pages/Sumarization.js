@@ -34,7 +34,6 @@ const PAGE_SIZE = 10;
 const ResearchPapers = () => {
 
   const { token } = useToken();
-  
   // State
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +101,32 @@ const ResearchPapers = () => {
       message.error('Failed to fetch papers');
       return false;
     }
+    // setPapers([
+    //   {
+    //     id: 1,
+    //     title: "Exploring AI in Healthcare",
+    //     abstract: "This paper explores the applications of AI in modern healthcare systems.",
+    //     authors: ["John Doe", "Jane Smith"],
+    //     source: "ScienceDirect",
+    //     url: "https://sciencedirect.com/ai-healthcare",
+    //     pdf_url: "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf",
+    //     categories: ["AI", "Healthcare"],
+    //     publication_date: "2024-01-15",
+    //     created_at: "2024-01-16T12:00:00Z",
+    //   },
+    //   {
+    //     id: 2,
+    //     title: "Quantum Computing Revolution",
+    //     abstract: "This paper discusses advancements in quantum computing.",
+    //     authors: ["Alice Johnson", "Bob Lee"],
+    //     source: "IEEE",
+    //     url: "https://ieee.org/quantum-computing",
+    //     pdf_url: "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf",
+    //     categories: ["Quantum Computing", "Technology"],
+    //     publication_date: "2024-02-01",
+    //     created_at: "2024-02-02T15:00:00Z",
+    //   },
+    // ])
   };
 
   // Debounced search function
@@ -114,7 +139,7 @@ const ResearchPapers = () => {
       } finally {
         setSearching(false);
       }
-    }, 500),
+    }, 2000),
     [filters]
   );
 
@@ -196,10 +221,10 @@ const ResearchPapers = () => {
           overflow: "hidden",
           marginTop: 16,
           background: token.colorBgElevated,
-          padding: 16,
+          padding: 12,
           borderRadius: token.borderRadiusLG,
           display: "flex",
-          gap: 16
+          gap: 12
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -207,7 +232,7 @@ const ResearchPapers = () => {
           flex: 1, 
           background: token.colorBgContainer,
           borderRadius: token.borderRadiusLG,
-          padding: 16
+          // padding: 16
         }}>
           <AIChat uniqueID={paper.id}  paper={paper} />
         </div>
@@ -215,7 +240,7 @@ const ResearchPapers = () => {
           flex: 1,
           background: token.colorBgContainer,
           borderRadius: token.borderRadiusLG,
-          padding: 16
+          // padding: 16
         }}>
           {paper.pdf_url && <PdfViewer pdfUrl={paper.pdf_url} />}
         </div>

@@ -22,7 +22,8 @@ from .models import (
 from .serializers import (
     MessageSerializer,
     ChatSerializer,
-    GroupChatSerializer
+    GroupChatSerializer,
+    User
 )
 from django.db import models
 from . import middleware
@@ -568,6 +569,7 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error removing members from group: {str(e)}")
             return False, None
+
 class ChatConsumer(BaseChatConsumer):
     """Consumer for private chats"""
     
@@ -581,8 +583,6 @@ class ChatConsumer(BaseChatConsumer):
             logger.info(f"Connecting to private chat: {self.chat_id}")
             
             chat = await self.get_chat()
-
-        
 
             if not chat or not chat.is_active:
                 logger.error(f"Chat not found or inactive: {self.chat_id}")
@@ -650,8 +650,6 @@ class ChatConsumer(BaseChatConsumer):
                 'type': 'error',
                 'message': 'Internal server error'
             }))
-
-
 
     @database_sync_to_async
     def get_chat(self):
@@ -836,7 +834,7 @@ class GroupChatConsumer(BaseChatConsumer):
                 
             
                 
-                
+        
         except json.JSONDecodeError:
             logger.error("Invalid JSON in group message")
             await self.send(json.dumps({
@@ -1061,10 +1059,6 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             'notification': event['notification']
         }))
 
-
-
-
-
 def validate_message_data( message_type, data):
      
         try:
@@ -1102,4 +1096,42 @@ def validate_message_data( message_type, data):
         except Exception as e:
             logger.error(f"Error validating message data: {str(e)}")
             return False
+        
+class DiffChatConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.room_name = "chat_room"  # Single room for now
+        self.room_group_name = f"chat_{self.room_name}"
 
+        # Join the room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name,
+        )
+
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        # Leave the room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name,
+        )
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        message = data.get("message", "")
+
+        # Send message to the room group
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                "type": "chat_message",
+                "message": message,
+            },
+        )
+
+    async def chat_message(self, event):
+        message = event["message"]
+
+        # Echo the message back to WebSocket
+        await self.send(text_data=json.dumps({"message": message}))

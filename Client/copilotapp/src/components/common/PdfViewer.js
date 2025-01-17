@@ -4,7 +4,6 @@ import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
 import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
 
-// Use the correct version of the worker file
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs`;
 
 const PdfViewer = ({ pdfUrl }) => {
@@ -15,8 +14,8 @@ const PdfViewer = ({ pdfUrl }) => {
     <div
       style={{
         height: "500px",
-        backgroundColor: "rgb(20, 20, 20)", // Set the background to dark
-        color: "white", // Ensure text appears white for visibility
+        backgroundColor: "rgb(20, 20, 20)", 
+        color: "white",
         borderRadius: "8px", // Optional: Add rounded corners
       }}
     >
