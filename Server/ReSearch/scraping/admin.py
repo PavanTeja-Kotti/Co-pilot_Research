@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.db.models import Count, Q
 from django import forms
-from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike
+from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike,ReadPaper
 import json
 
 class ResearchPaperForm(forms.ModelForm):
@@ -76,6 +76,9 @@ class ResearchPaperAdmin(admin.ModelAdmin):
         }),
         ('Categories', {
             'fields': ('categories_text',)
+        }),
+        ('Statistics', {
+            'fields': ('citation_count', 'average_reading_time')
         }),
         ('Bookmarks', {
             'fields': ('bookmarks_preview',)
@@ -255,7 +258,50 @@ class CategoryLikeAdmin(admin.ModelAdmin):
     category_name.short_description = 'Category'
     category_name.admin_order_field = 'category__name'
 
+
+@admin.register(ReadPaper)
+class ReadPaperAdmin(admin.ModelAdmin):
+    list_display = ['user_email', 'paper_title', 'read_at', 'is_active', 'notes_preview']
+    list_filter = ['is_active', 'read_at']
+    search_fields = ['user__email', 'paper__title', 'notes']
+    raw_id_fields = ['user', 'paper']
+    date_hierarchy = 'read_at'
+    readonly_fields = ['read_at']
+    list_per_page = 25
+
+    def user_email(self, obj):
+        if obj.user:
+            url = reverse('admin:accounts_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.email)
+        return 'Deleted User'
+    user_email.short_description = 'User'
+    user_email.admin_order_field = 'user__email'
+
+    def paper_title(self, obj):
+        url = reverse('admin:scraping_researchpaper_change', args=[obj.paper.id])
+        return format_html('<a href="{}">{}</a>', url, obj.paper.title)
+    paper_title.short_description = 'Paper'
+    paper_title.admin_order_field = 'paper__title'
+
+    def notes_preview(self, obj):
+        if obj.notes:
+            return obj.notes[:50] + '...' if len(obj.notes) > 50 else obj.notes
+        return '-'
+    notes_preview.short_description = 'Notes Preview'
+
+    actions = ['mark_active', 'mark_inactive']
+
+    def mark_active(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated} read papers marked as active.')
+    mark_active.short_description = "Mark selected papers as active"
+
+    def mark_inactive(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated} read papers marked as inactive.')
+    mark_inactive.short_description = "Mark selected papers as inactive"
 # Register all models
+# admin.site.register(ReadPaper, ReadPaperAdmin)
 admin.site.register(ResearchPaper, ResearchPaperAdmin)
 admin.site.register(BookmarkedPaper, BookmarkedPaperAdmin)
 admin.site.register(ResearchPaperCategory, ResearchPaperCategoryAdmin)

@@ -1,4 +1,3 @@
-// ChatView.jsx
 import React, { useEffect, useCallback, useRef, useState } from "react";
 import {
   Button,
@@ -18,6 +17,7 @@ import {
   SendOutlined,
   PaperClipOutlined,
   DeleteOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import MessageBubble from "./MessageBubble";
 import { chatapi, webSocket } from "../../utils/socket";
@@ -55,13 +55,12 @@ const ChatView = ({
   const scrollRef = useRef(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const lastMessageCountRef = useRef(chat.messages.length);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const [mentionOptions, setMentionOptions] = useState([]);
 
   // Handle member search for mentions
   const onSearch = (searchValue, prefix) => {
-
-   
     if (prefix === '@') {
       const filteredMembers = chat.members.filter(member => {
         const displayName = member.username;
@@ -72,7 +71,7 @@ const ChatView = ({
         const displayName = member.username;
         return {
           key: member.id,
-          value: displayName, // This is what gets inserted into the input
+          value: displayName,
           label: (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Avatar size="small">
@@ -83,8 +82,6 @@ const ChatView = ({
           )
         };
       }));
-
-   
     }
   };
 
@@ -169,60 +166,30 @@ const ChatView = ({
   // Extract mentions from message
   const extractMentions = (text) => {
     const mentions = [];
-    const regex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+    const regex = /@(\w+)\s/g;
     let match;
     
     while ((match = regex.exec(text)) !== null) {
-      mentions.push({
-        name: match[1],
-        id: match[2]
-      });
-    }
-    
-    return mentions;
-  };
-
-  // Handle sending messages
-  const handleSendMessage = async () => {
-    if (!message.trim()) return;
-
-    try {
-      // Get mention data directly from the message
-      const mentions = [];
-      const regex = /@(\w+)\s/g;
-      let match;
+      const mentionedName = match[1];
+      const mentionedUser = chat.members.find(member => 
+        member.username === mentionedName
+      );
       
-      while ((match = regex.exec(message)) !== null) {
-        const mentionedName = match[1];
-        const mentionedUser = chat.members.find(member => 
-          (member.username) === mentionedName
-        );
-        
-        if (mentionedUser) {
-          mentions.push({
-            name: mentionedName,
-            id: mentionedUser.id
-          });
-        }
+      if (mentionedUser) {
+        mentions.push({
+          name: mentionedName,
+          id: mentionedUser.id
+        });
       }
-
-      if (chat.type === "group") {
-        await chatapi.sendGroupMessage(chat.id,  message.trim(),'TEXT', null,mentions);
-      } else {
-        await chatapi.sendChatMessage(chat.id,  message.trim() ,'TEXT', null,mentions);
-      }
-      setMessage("");
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      antMessage.error("Failed to send message");
     }
+    return mentions;
   };
 
   // Handle file uploads
   const handleFileUpload = async (file) => {
     if (file.size > MAX_FILE_SIZE) {
       antMessage.error('File size should not exceed 50MB');
-      return;
+      return false;
     }
 
     if (!ALLOWED_FILE_TYPES.some(type => {
@@ -232,72 +199,137 @@ const ChatView = ({
       return type === file.type;
     })) {
       antMessage.error('File type not supported');
-      return;
+      return false;
     }
 
-    const tempMessageId = `upload-${Date.now()}`;
+    setPendingFiles(prev => [...prev, {
+      id: Date.now(),
+      file,
+      preview: URL.createObjectURL(file)
+    }]);
 
+    return false;
+  };
+
+  // Handle removing pending file
+  const handleRemovePendingFile = (fileId) => {
+    setPendingFiles(prev => prev.filter(file => file.id !== fileId));
+  };
+
+  // Handle sending messages
+  const handleSendMessage = async () => {
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage && pendingFiles.length === 0) return;
+  
     try {
-      setUploadingFiles((prev) =>
-        new Map(prev).set(tempMessageId, {
-          file,
-          progress: 0,
-          status: "uploading",
-        })
-      );
-
-      const result = await uploadFile(file, (progress) => {
-        setUploadingFiles((prev) =>
-          new Map(prev).set(tempMessageId, {
-            file,
-            progress,
-            status: "uploading",
-          })
-        );
-      });
-
-      setUploadingFiles((prev) =>
-        new Map(prev).set(tempMessageId, {
-          file,
-          progress: 100,
-          status: "done",
-          result,
-        })
-      );
-
-      if (chat.type === "group") {
-        await chatapi.sendGroupMessage(chat.id, null, result.type, result);
-      } else {
-        await chatapi.sendChatMessage(chat.id, null, result.type, result);
+      const mentions = extractMentions(message);
+      const uploadResults = [];
+      const uploadErrors = [];
+  
+      // Upload all files first
+      for (const pendingFile of pendingFiles) {
+        const tempMessageId = `upload-${pendingFile.id}`;
+        try {
+          setUploadingFiles(prev => 
+            new Map(prev).set(tempMessageId, {
+              file: pendingFile.file,
+              progress: 0,
+              status: "uploading",
+            })
+          );
+  
+          const result = await uploadFile(pendingFile.file, (progress) => {
+            setUploadingFiles(prev =>
+              new Map(prev).set(tempMessageId, {
+                file: pendingFile.file,
+                progress,
+                status: "uploading",
+              })
+            );
+          });
+  
+          uploadResults.push({
+            type: result.type,
+            result: result
+          });
+  
+          setUploadingFiles(prev => {
+            const next = new Map(prev);
+            next.delete(tempMessageId);
+            return next;
+          });
+        } catch (error) {
+          console.error("Failed to upload file:", error);
+          uploadErrors.push(pendingFile.file.name);
+          
+          setUploadingFiles(prev =>
+            new Map(prev).set(tempMessageId, {
+              file: pendingFile.file,
+              progress: 0,
+              status: "error",
+              error: error.message,
+            })
+          );
+  
+          setTimeout(() => {
+            setUploadingFiles(prev => {
+              const next = new Map(prev);
+              next.delete(tempMessageId);
+              return next;
+            });
+          }, 5000);
+        }
       }
-
-      setTimeout(() => {
-        setUploadingFiles((prev) => {
-          const next = new Map(prev);
-          next.delete(tempMessageId);
-          return next;
-        });
-      }, 1000);
+  
+      // Determine message type and send accordingly
+      if (uploadResults.length > 0) {
+        const isMultiple = uploadResults.length > 1 || (uploadResults.length === 1 && trimmedMessage);
+        
+        if (isMultiple) {
+          // Send as MULTIPLE if there are multiple files or one file with text
+          if (trimmedMessage) {
+            if (chat.type === "group") {
+              await chatapi.sendGroupMessage(chat.id, trimmedMessage, 'MULTIPLE', uploadResults, mentions);
+            } else {
+              await chatapi.sendChatMessage(chat.id, trimmedMessage, 'MULTIPLE', uploadResults, mentions);
+            }
+            setMessage("");
+          } else {
+            if (chat.type === "group") {
+              await chatapi.sendGroupMessage(chat.id, null, 'MULTIPLE', uploadResults, mentions);
+            } else {
+              await chatapi.sendChatMessage(chat.id, null, 'MULTIPLE', uploadResults, mentions);
+            }
+          }
+        } else {
+          // Send as single file type if there's just one file without text
+          const singleUpload = uploadResults[0];
+          if (chat.type === "group") {
+            await chatapi.sendGroupMessage(chat.id, null, singleUpload.type, singleUpload.result, mentions);
+          } else {
+            await chatapi.sendChatMessage(chat.id, null, singleUpload.type, singleUpload.result, mentions);
+          }
+        }
+      } else if (trimmedMessage) {
+        // Send text only message if no files were uploaded successfully
+        if (chat.type === "group") {
+          await chatapi.sendGroupMessage(chat.id, trimmedMessage, 'TEXT', null, mentions);
+        } else {
+          await chatapi.sendChatMessage(chat.id, trimmedMessage, 'TEXT', null, mentions);
+        }
+        setMessage("");
+      }
+  
+      // Show errors if any files failed to upload
+      if (uploadErrors.length > 0) {
+        antMessage.error(`Failed to upload: ${uploadErrors.join(', ')}`);
+      }
+  
+      // Clear pending files
+      setPendingFiles([]);
     } catch (error) {
-      console.error("Failed to upload file:", error);
-      antMessage.error("Failed to upload file");
-
-      setUploadingFiles((prev) =>
-        new Map(prev).set(tempMessageId, {
-          file,
-          progress: 0,
-          status: "error",
-          error: error.message,
-        })
-      );
-
-      setTimeout(() => {
-        setUploadingFiles((prev) => {
-          const next = new Map(prev);
-          next.delete(tempMessageId);
-          return next;
-        });
-      }, 5000);
+      console.error("Failed to send message:", error);
+      antMessage.error("Failed to send message");
     }
   };
 
@@ -441,6 +473,7 @@ const ChatView = ({
       </div>
 
       {/* Input Area */}
+      {/* Input Area */}
       <div
         style={{
           padding: "8px 12px",
@@ -448,13 +481,43 @@ const ChatView = ({
           paddingBottom: 5,
         }}
       >
+        {/* Pending Files Preview */}
+        {pendingFiles.length > 0 && (
+          <div style={{ 
+            padding: "8px 0", 
+            display: "flex", 
+            flexWrap: "wrap", 
+            gap: "8px" 
+          }}>
+            {pendingFiles.map(file => (
+              <div
+                key={file.id}
+                style={{
+                  position: "relative",
+                  backgroundColor: "#2d2d2d",
+                  borderRadius: "4px",
+                  padding: "4px 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}
+              >
+                <span style={{ color: "#fff", fontSize: "12px" }}>
+                  {file.file.name}
+                </span>
+                <CloseCircleOutlined
+                  style={{ color: "#ff4d4f", cursor: "pointer" }}
+                  onClick={() => handleRemovePendingFile(file.id)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        
         <Space.Compact style={{ width: "100%", display: "flex", gap: 8 }}>
           <Upload
             showUploadList={false}
-            beforeUpload={(file) => {
-              handleFileUpload(file);
-              return false;
-            }}
+            beforeUpload={handleFileUpload}
             accept={ALLOWED_FILE_TYPES.join(',')}
           >
             <Button
@@ -501,11 +564,40 @@ const ChatView = ({
               border: "none",
               padding: "0 16px",
               borderRadius: "20px",
-              
             }}
           />
         </Space.Compact>
       </div>
+
+      {/* Custom scrollbar styles */}
+      <style>
+        {`
+          .custom-scroll::-webkit-scrollbar {
+            width: 1px;
+            background-color: transparent;
+          }
+          .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: ${token.colorTextQuaternary};
+            border-radius: 20px;
+          }
+          .custom-scroll::-webkit-scrollbar-track {
+            background-color: ${token.colorBgContainer};
+          }
+          .custom-scroll:hover::-webkit-scrollbar-thumb {
+            background-color: ${token.colorTextTertiary};
+          }
+          .custom-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: ${token.colorTextQuaternary} transparent;
+          }
+          .custom-scroll:hover {
+            scrollbar-color: ${token.colorTextTertiary} transparent;
+          }
+          .custom-scroll::-webkit-scrollbar-thumb {
+            transition: background-color 0.2s;
+          }
+        `}
+      </style>
     </div>
   );
 };

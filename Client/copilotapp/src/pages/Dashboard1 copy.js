@@ -1,4 +1,4 @@
-import React, { useState, useEffect ,useCallback, useMemo} from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Button, 
@@ -40,121 +40,12 @@ const { Title, Text, Paragraph } = Typography;
 
 const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2'];
 
-
-const RenderActiveShape = React.memo(({ cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value }) => (
-  <g>
-    <text x={cx} y={cy - 20} textAnchor="middle" fill="#000">
-      {payload.name}
-    </text>
-    <text x={cx} y={cy + 20} textAnchor="middle" fill="#666">
-      {`${value} items (${(percent * 100).toFixed(1)}%)`}
-    </text>
-    <Sector
-      cx={cx}
-      cy={cy}
-      innerRadius={innerRadius}
-      outerRadius={outerRadius}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      fill={fill}
-    />
-    <Sector
-      cx={cx}
-      cy={cy}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      innerRadius={outerRadius + 6}
-      outerRadius={outerRadius + 10}
-      fill={fill}
-    />
-  </g>
-));
-
-// Memoized UI Components
-const SkeletonUI = React.memo(() => (
-  <Space direction="vertical" size="large" style={{ width: '100%' }}>
-    <Row gutter={[16, 16]}>
-      <Col span={12}>
-        <Card>
-          <Skeleton.Avatar size={200} active shape="circle" />
-          <Skeleton active />
-        </Card>
-      </Col>
-      <Col span={12}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Card>
-            <Skeleton.Button active block size="large" />
-            <Skeleton active paragraph={{ rows: 1 }} />
-          </Card>
-          <Card>
-            <Skeleton.Input active size="large" block />
-            <Skeleton active paragraph={{ rows: 4 }} />
-          </Card>
-        </Space>
-      </Col>
-    </Row>
-  </Space>
-));
-
-const InitialState = React.memo(() => (
-  <Card style={{ textAlign: 'center', padding: '40px' }}>
-    <Space direction="vertical" size="large">
-      <FileTextOutlined style={{ fontSize: '48px', color: '#bfbfbf' }} />
-      <Text type="secondary">
-        Enter a search term to begin exploring the research papers
-      </Text>
-    </Space>
-  </Card>
-));
-
-const NoDataUI = React.memo(({ searchQuery, onReset }) => (
-  <Card style={{ textAlign: 'center', padding: '40px' }}>
-    <Space direction="vertical" size="large">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={
-          <Text type="secondary">
-            {searchQuery 
-              ? `No results found for "${searchQuery}"`
-              : 'No data available'}
-          </Text>
-        }
-      />
-      <Button type="primary" onClick={onReset} icon={<ReloadOutlined />}>
-        Reset Search
-      </Button>
-    </Space>
-  </Card>
-));
-
 const ResearchDashboard = () => {
-  // Constants
-  const arrayFields = useMemo(() => ({
-    authors: 'authors',
-    categories: 'categories',
-  }), []);
-
-  const fields = useMemo(() => ({
-    title: 'title',
-    abstract: 'abstract',
-    date: 'publication_date',
-    links: {
-      url: 'url',
-      pdfUrl: 'pdf_url'
-    }
-  }), []);
-
   // States
-  const [mainData, setMainData] = useState({
-    yearData: [],
-    categoryData: [],
-    originalCategoryData: []
-  });
+  const [mainData, setMainData] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState(null);
-  const [selectedYear, setSelectedYear] = useState(null);
   const [detailData, setDetailData] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(null);
   const [analysisMode, setAnalysisMode] = useState('authors');
   const [selectedTimeRange, setSelectedTimeRange] = useState('all');
   const [selectedFilters, setSelectedFilters] = useState({});
@@ -163,69 +54,79 @@ const ResearchDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [hasData, setHasData] = useState(false);
   const [error, setError] = useState(null);
-  const [searchResults, setSearchResults] = useState([]);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchResults, setSearchResults] = useState([]); // Original search results
 
-  // Memoized data processing functions
-  const processMainData = useCallback((mode, data) => {
+  // Configuration
+  const arrayFields = {
+    authors: 'authors',
+    categories: 'categories'
+  };
+
+  const titleField = 'title';
+  const abstractField = 'abstract';
+  const dateField = 'publication_date';
+  const linkFields = {
+    url: 'url',
+    pdfUrl: 'pdf_url'
+  };
+
+  // Effects
+  useEffect(() => {
+    if (hasSearched && filteredData.length > 0) {
+      processMainData(analysisMode, filteredData);
+    }
+  }, [analysisMode]);
+
+  useEffect(() => {
+    if (hasSearched) {
+      applyDataFilters();
+    }
+  }, [selectedTimeRange, selectedFilters, searchResults]);
+
+  // Data processing functions
+  const processMainData = (mode, data) => {
     const field = arrayFields[mode] || mode;
+    let categorizedData = {};
     
     try {
-      // Process year data using reduce for better performance
-      const yearMap = data.reduce((acc, item) => {
-        const year = new Date(item[fields.date]).getFullYear();
-        acc.set(year, (acc.get(year) || 0) + 1);
-        return acc;
-      }, new Map());
+      data.forEach(item => {
+        if (Array.isArray(item[field])) {
+          item[field].forEach(value => {
+            categorizedData[value] = (categorizedData[value] || 0) + 1;
+          });
+        } else if (item[field]) {
+          categorizedData[item[field]] = (categorizedData[item[field]] || 0) + 1;
+        }
+      });
 
-      const yearChartData = Array.from(yearMap.entries())
-        .map(([name, value]) => ({
-          name: name.toString(),
-          value,
-          items: data.filter(item => 
-            new Date(item[fields.date]).getFullYear().toString() === name.toString()
-          )
-        }))
-        .sort((a, b) => b.name - a.name);
-
-      // Process category data using reduce
-      const categoryData = data.reduce((acc, item) => {
-        const values = Array.isArray(item[field]) ? item[field] : [item[field]];
-        values.forEach(value => {
-          if (!value) return;
-          acc.set(value, (acc.get(value) || 0) + 1);
-        });
-        return acc;
-      }, new Map());
-
-      const categoryChartData = Array.from(categoryData.entries())
+      const chartData = Object.entries(categorizedData)
         .map(([name, value]) => ({
           name,
           value,
           items: data.filter(item => {
-            if (Array.isArray(item[field])) return item[field].includes(name);
+            if (Array.isArray(item[field])) {
+              return item[field].includes(name);
+            }
             return item[field] === name;
           })
         }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 10);
+        .slice(0, 6);
 
-      setMainData({
-        yearData: yearChartData,
-        categoryData: categoryChartData,
-        originalCategoryData: categoryChartData
-      });
+      setMainData(chartData);
       setError(null);
     } catch (err) {
       setError('Error processing data. Please try again.');
       console.error('Error in processMainData:', err);
     }
-  }, [arrayFields, fields.date]);
+  };
 
-  // Memoized filter function
-  const applyDataFilters = useCallback(() => {
+  const applyDataFilters = () => {
     try {
       let filtered = [...searchResults];
 
+      // Time range filter
       if (selectedTimeRange !== 'all') {
         const now = new Date();
         const months = {
@@ -236,17 +137,21 @@ const ResearchDashboard = () => {
         
         if (months) {
           const cutoff = new Date(now.setMonth(now.getMonth() - months));
-          filtered = filtered.filter(item => new Date(item[fields.date]) >= cutoff);
+          filtered = filtered.filter(item => new Date(item[dateField]) >= cutoff);
         }
       }
 
-      filtered = Object.entries(selectedFilters).reduce((acc, [field, values]) => {
-        if (!values?.length) return acc;
-        return acc.filter(item => {
-          const itemValues = Array.isArray(item[field]) ? item[field] : [item[field]];
-          return itemValues.some(value => values.includes(value));
-        });
-      }, filtered);
+      // Apply selected filters
+      Object.entries(selectedFilters).forEach(([field, values]) => {
+        if (values && values.length > 0) {
+          filtered = filtered.filter(item => {
+            if (Array.isArray(item[field])) {
+              return item[field].some(value => values.includes(value));
+            }
+            return values.includes(item[field]);
+          });
+        }
+      });
 
       setFilteredData(filtered);
       setHasData(filtered.length > 0);
@@ -255,10 +160,10 @@ const ResearchDashboard = () => {
       setError('Error applying filters. Please try again.');
       console.error('Error in applyDataFilters:', err);
     }
-  }, [searchResults, selectedTimeRange, selectedFilters, fields.date, analysisMode, processMainData]);
+  };
 
   // Event Handlers
-  const handleSearch = useCallback(async (value) => {
+  const handleSearch = async (value) => {
     if (!value.trim()) {
       setError('Please enter a search term');
       return;
@@ -268,10 +173,9 @@ const ResearchDashboard = () => {
     setSearchQuery(value);
     setError(null);
     setSelectedTopic(null);
-    setSelectedYear(null);
-    setSelectedCategoryIndex(null);
     
     try {
+
       const response = await api.scraping().getPapaerWithoutPagination({ search: value });
       const results = response.data;
       
@@ -280,6 +184,7 @@ const ResearchDashboard = () => {
       setHasData(results.length > 0);
       setSelectedFilters({});
       setSelectedTimeRange('all');
+      setHasSearched(true);
       
       processMainData(analysisMode, results);
     } catch (err) {
@@ -289,74 +194,9 @@ const ResearchDashboard = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [analysisMode, processMainData]);
+  };
 
-  const handleYearClick = useCallback((data) => {
-    if (!data?.payload) return;
-    
-    const year = data.payload.name;
-    setSelectedYear(year);
-    
-    const yearFilteredData = filteredData.filter(item => 
-      new Date(item[fields.date]).getFullYear().toString() === year
-    );
-
-    const field = arrayFields[analysisMode] || analysisMode;
-    const categorizedData = yearFilteredData.reduce((acc, item) => {
-      const values = Array.isArray(item[field]) ? item[field] : [item[field]];
-      values.forEach(value => {
-        if (!value) return;
-        acc.set(value, (acc.get(value) || 0) + 1);
-      });
-      return acc;
-    }, new Map());
-
-    const categoryChartData = Array.from(categorizedData.entries())
-      .map(([name, value]) => ({
-        name,
-        value,
-        items: yearFilteredData.filter(item => {
-          if (Array.isArray(item[field])) return item[field].includes(name);
-          return item[field] === name;
-        })
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    setMainData(prev => ({
-      ...prev,
-      categoryData: categoryChartData
-    }));
-    
-    setSelectedTopic(`Year ${year}`);
-    setDetailData(yearFilteredData);
-  }, [analysisMode, arrayFields, fields.date, filteredData]);
-
-  const handleCategoryClick = useCallback((data, index) => {
-    if (!data?.payload) return;
-    
-    setSelectedCategoryIndex(index);
-    const category = data.payload.name;
-    const field = arrayFields[analysisMode] || analysisMode;
-    
-    let filteredItems = filteredData;
-    
-    if (selectedYear) {
-      filteredItems = filteredItems.filter(item => 
-        new Date(item[fields.date]).getFullYear().toString() === selectedYear
-      );
-    }
-    
-    filteredItems = filteredItems.filter(item => {
-      if (Array.isArray(item[field])) return item[field].includes(category);
-      return item[field] === category;
-    });
-    
-    setSelectedTopic(selectedYear ? `${category} (${selectedYear})` : category);
-    setDetailData(filteredItems);
-  }, [analysisMode, arrayFields, fields.date, filteredData, selectedYear]);
-
-  const handleReset = useCallback(() => {
+  const handleReset = () => {
     setSearchQuery('');
     setSelectedFilters({});
     setSelectedTimeRange('all');
@@ -365,157 +205,117 @@ const ResearchDashboard = () => {
     setHasData(false);
     setError(null);
     setSelectedTopic(null);
-    setSelectedYear(null);
-    setSelectedCategoryIndex(null);
-    setMainData({
-      yearData: [],
-      categoryData: [],
-      originalCategoryData: []
-    });
-  }, []);
+    setHasSearched(false);
+    setMainData([]);
+  };
 
-  const handleBackClick = useCallback(() => {
-    setSelectedTopic(null);
-    setSelectedYear(null);
-    setSelectedCategoryIndex(null);
-    setMainData(prev => ({
+  const handleFilterChange = (field, values) => {
+    setSelectedFilters(prev => ({
       ...prev,
-      categoryData: prev.originalCategoryData
+      [field]: values
     }));
-    setDetailData([]);
-  }, []);
+  };
 
-  // Effects
-  useEffect(() => {
-    if (searchResults.length > 0) {
-      applyDataFilters();
-    }
-  }, [analysisMode, selectedTimeRange, selectedFilters, searchResults, applyDataFilters]);
+  const handleTimeRangeChange = (value) => {
+    setSelectedTimeRange(value);
+  };
 
-  // Memoized filter options
-  const filterOptions = useMemo(() => {
-    return Object.entries(arrayFields).map(([key, field]) => ({
-      key,
-      field,
-      options: Array.from(new Set(searchResults.flatMap(item => item[field])))
-        .map(value => ({ value, label: value }))
-    }));
-  }, [arrayFields, searchResults]);
+  const handlePieClick = (data) => {
+    if (!data || !data.payload) return;
+    setSelectedTopic(data.payload.name);
+    setDetailData(data.payload.items);
+  };
 
-  const timeRangeOptions = useMemo(() => [
-    { value: 'all', label: 'All Time' },
-    { value: 'last_year', label: 'Last Year' },
-    { value: 'last_6_months', label: 'Last 6 Months' },
-    { value: 'last_3_months', label: 'Last 3 Months' }
-  ], []);
-
-  const renderLabel = (props) => {
-    const { 
-      cx, 
-      cy, 
-      midAngle, 
-      innerRadius, 
-      outerRadius, 
-      value, 
-      name, 
-      startAngle, 
-      endAngle 
-    } = props;
+  const renderActiveShape = (props) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
     
-    const RADIAN = Math.PI / 180;
-    const arcLength = Math.abs(endAngle - startAngle);
-    
-    // Calculate the middle radius for text placement
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    
-    // Calculate position
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    
-    // Calculate available width based on arc length and radius
-    const availableWidth = 2 * Math.PI * radius * (arcLength / 360);
-    
-    // Dynamic font sizing based on segment size and text length
-    let fontSize = 14; // Default size
-    if (arcLength < 6) {
-      return null; // Don't render text for very small segments
-    } 
-    else if (arcLength < 15) {
-      fontSize=6;
-      
-    } else if (arcLength < 30) {
-      fontSize = 8;
-    } else if (arcLength < 45) {
-      fontSize = 10;
-    } else if (name.length > 20) {
-      // Reduce font size for long text
-      fontSize = Math.min(14, Math.floor(availableWidth / name.length) * 1.5);
-    }
-    
-    // For very large segments (like main categories)
-    if (arcLength > 60) {
-      fontSize = Math.min(18, fontSize); // Cap maximum size
-    }
-    
-    // Split long text into multiple lines if segment is large enough
-    const words = name.split(' ');
-    const shouldWrap = arcLength > 45 && words.length > 1;
-    
-    if (shouldWrap) {
-      // Calculate middle word index
-      const middleIndex = Math.floor(words.length / 2);
-      const firstLine = words.slice(0, middleIndex).join(' ');
-      const secondLine = words.slice(middleIndex).join(' ');
-      
-      return (
-        <g>
-          <text 
-            x={x} 
-            y={y - fontSize/2}
-            fill="white" 
-            textAnchor="middle" 
-            dominantBaseline="central"
-            style={{
-              fontSize: `${fontSize}px`,
-              fontWeight: 500
-            }}
-          >
-            {firstLine}
-          </text>
-          <text 
-            x={x} 
-            y={y + fontSize/2}
-            fill="white" 
-            textAnchor="middle" 
-            dominantBaseline="central"
-            style={{
-              fontSize: `${fontSize}px`,
-              fontWeight: 500
-            }}
-          >
-            {secondLine}
-          </text>
-        </g>
-      );
-    }
-    
-    // Single line text
     return (
-      <text 
-        x={x} 
-        y={y}
-        fill="white" 
-        textAnchor="middle" 
-        dominantBaseline="central"
-        style={{
-          fontSize: `${fontSize}px`,
-          fontWeight: 500
-        }}
-      >
-        {name}
-      </text>
+      <g>
+        <text x={cx} y={cy - 20} textAnchor="middle" fill="#000">
+          {payload.name}
+        </text>
+        <text x={cx} y={cy + 20} textAnchor="middle" fill="#666">
+          {`${value} items (${(percent * 100).toFixed(1)}%)`}
+        </text>
+        <Sector
+          cx={cx}
+          cy={cy}
+          innerRadius={innerRadius}
+          outerRadius={outerRadius}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          fill={fill}
+        />
+        <Sector
+          cx={cx}
+          cy={cy}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          innerRadius={outerRadius + 6}
+          outerRadius={outerRadius + 10}
+          fill={fill}
+        />
+      </g>
     );
   };
+
+
+
+  const renderSkeletonUI = () => (
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Row gutter={[16, 16]}>
+        <Col span={12}>
+          <Card>
+            <Skeleton.Avatar size={200} active shape="circle" />
+            <Skeleton active />
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Card>
+              <Skeleton.Button active block size="large" />
+              <Skeleton active paragraph={{ rows: 1 }} />
+            </Card>
+            <Card>
+              <Skeleton.Input active size="large" block />
+              <Skeleton active paragraph={{ rows: 4 }} />
+            </Card>
+          </Space>
+        </Col>
+      </Row>
+    </Space>
+  );
+
+  const renderInitialState = () => (
+    <Card style={{ textAlign: 'center', padding: '40px' }}>
+      <Space direction="vertical" size="large">
+        <FileTextOutlined style={{ fontSize: '48px', color: '#bfbfbf' }} />
+        <Text type="secondary">
+          Enter a search term to begin exploring the research papers
+        </Text>
+      </Space>
+    </Card>
+  );
+
+  const renderNoDataUI = () => (
+    <Card style={{ textAlign: 'center', padding: '40px' }}>
+      <Space direction="vertical" size="large">
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Text type="secondary">
+              {searchQuery 
+                ? `No results found for "${searchQuery}"`
+                : 'No data available'}
+            </Text>
+          }
+        />
+        <Button type="primary" onClick={handleReset} icon={<ReloadOutlined />}>
+          Reset Search
+        </Button>
+      </Space>
+    </Card>
+  );
 
   return (
     <div className="research-dashboard">
@@ -533,7 +333,7 @@ const ResearchDashboard = () => {
               defaultValue={searchQuery}
             />
           </Col>
-          {searchResults.length > 0 && (
+          {hasSearched && (
             <Col>
               <Button 
                 icon={<ReloadOutlined />}
@@ -559,11 +359,11 @@ const ResearchDashboard = () => {
 
         {/* Main Content */}
         {isLoading ? (
-          <SkeletonUI />
-        ) : !searchResults.length ? (
-          <InitialState />
+          renderSkeletonUI()
+        ) : !hasSearched ? (
+          renderInitialState()
         ) : !hasData ? (
-          <NoDataUI searchQuery={searchQuery} onReset={handleReset} />
+          renderNoDataUI()
         ) : (
           <>
             <Row gutter={[16, 16]}>
@@ -575,7 +375,7 @@ const ResearchDashboard = () => {
                         {selectedTopic && (
                           <Button 
                             icon={<ArrowLeftOutlined />} 
-                            onClick={handleBackClick}
+                            onClick={() => setSelectedTopic(null)}
                           />
                         )}
                         <RiseOutlined />
@@ -596,49 +396,29 @@ const ResearchDashboard = () => {
                     </Row>
                   }
                 >
-                  <div style={{ height: 500 }}>
+                  <div style={{ height: 347 }}>
                     <ResponsiveContainer>
                       <PieChart>
-                      <Pie
-                          activeIndex={selectedCategoryIndex !== null ? selectedCategoryIndex : activeIndex}
-                          activeShape={RenderActiveShape}
-                          data={mainData.categoryData}
+                        <Pie
+                          activeIndex={activeIndex}
+                          activeShape={renderActiveShape}
+                          data={mainData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={140}
-                          outerRadius={210}
+                          innerRadius={60}
+                          outerRadius={120}
                           paddingAngle={5}
                           dataKey="value"
                           onMouseEnter={(_, index) => setActiveIndex(index)}
-                          onClick={(data, index) => handleCategoryClick(data, index)}
+                          onClick={handlePieClick}
                           cursor="pointer"
-                          label={renderLabel}
-                          labelLine={false}
                         >
-                          {mainData.categoryData.map((_, index) => (
-                            <Cell key={`category-${index}`} fill={COLORS[index % COLORS.length]} />
+                          {mainData.map((entry, index) => (
+                            <Cell key={index} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Pie
-                          data={mainData.yearData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={80}
-                          outerRadius={130}
-                          paddingAngle={2}
-                          dataKey="value"
-                          onClick={handleYearClick}
-                          cursor="pointer"
-                          label={renderLabel}
-                          labelLine={false}
-                        >
-                          {mainData.yearData.map((_, index) => (
-                            <Cell key={`year-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        
                         <Tooltip />
-                        {/* <Legend  ></Legend> */}
+                        <Legend />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -688,13 +468,18 @@ const ResearchDashboard = () => {
                         <Select 
                           style={{ width: '100%', marginTop: 8 }}
                           value={selectedTimeRange}
-                          onChange={(value) => setSelectedTimeRange(value)}
-                          options={timeRangeOptions}
+                          onChange={handleTimeRangeChange}
+                          options={[
+                            { value: 'all', label: 'All Time' },
+                            { value: 'last_year', label: 'Last Year' },
+                            { value: 'last_6_months', label: 'Last 6 Months' },
+                            { value: 'last_3_months', label: 'Last 3 Months' }
+                          ]}
                         />
                       </div>
 
                       {/* Dynamic Filters */}
-                      {filterOptions.map(({ key, field, options }) => (
+                      {Object.entries(arrayFields).map(([key, field]) => (
                         <div key={key}>
                           <Text strong>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
                           <Select 
@@ -702,8 +487,9 @@ const ResearchDashboard = () => {
                             style={{ width: '100%', marginTop: 8 }}
                             placeholder={`Select ${key}`}
                             value={selectedFilters[field] || []}
-                            onChange={(values) => setSelectedFilters(prev => ({ ...prev, [field]: values }))}
-                            options={options}
+                            onChange={(values) => handleFilterChange(field, values)}
+                            options={Array.from(new Set(searchResults.flatMap(item => item[field])))
+                              .map(value => ({ value, label: value }))}
                             maxTagCount={3}
                           />
                         </div>
@@ -732,14 +518,15 @@ const ResearchDashboard = () => {
               >
                 <div className="item-list">
                   {detailData.map((item, index) => (
-                    <ItemCard
-                      key={index}
-                      item={item}
-                      arrayFields={arrayFields}
-                      titleField={fields.title}
-                      abstractField={fields.abstract}
-                      linkFields={fields.links}
-                    />
+                    <div key={index}>
+                      <ItemCard
+                        item={item}
+                        titleField={titleField}
+                        abstractField={abstractField}
+                        arrayFields={arrayFields}
+                        linkFields={linkFields}
+                      />
+                    </div>
                   ))}
                 </div>
               </Card>
@@ -751,9 +538,14 @@ const ResearchDashboard = () => {
   );
 };
 
-export default React.memo(ResearchDashboard);
 
-const ItemCard = React.memo (({ 
+
+
+
+export default ResearchDashboard
+
+
+const ItemCard = ({ 
   item, 
   titleField, 
   abstractField, 
@@ -886,7 +678,7 @@ const ItemCard = React.memo (({
       </Modal>
     </>
   );
-});
+};
 
 const config = {
   titleField: 'title',

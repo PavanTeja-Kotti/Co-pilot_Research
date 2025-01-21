@@ -21,7 +21,7 @@ const { useToken } = theme;
 
 // Import a fallback icon from Ant Design
 
-const DynamicIconRenderer = ({ iconName }) => {
+export const DynamicIconRenderer = ({ iconName ,style}) => {
   try {
     // Handle SVG content if iconName starts with 'svg:'
     if (iconName?.startsWith('svg:')) {
@@ -35,10 +35,10 @@ const DynamicIconRenderer = ({ iconName }) => {
 
     // Original logic for Ant Design icons
     const IconComponent = Icons[iconName];
-    return IconComponent ? <IconComponent /> : <Icons.QuestionCircleOutlined />;
+    return IconComponent ? <IconComponent style={style}  /> : <Icons.QuestionCircleOutlined style={style} />;
   } catch (error) {
     // Return question mark icon for any errors
-    return <Icons.QuestionCircleOutlined />;
+    return <Icons.QuestionCircleOutlined style={style}  />;
   }
 };
 

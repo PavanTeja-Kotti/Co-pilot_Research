@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike
+from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike,ReadPaper
 
 class CategoryBriefSerializer(serializers.ModelSerializer):
     """Simplified version of Category serializer"""
@@ -81,7 +81,9 @@ class ResearchPaperBriefSerializer(serializers.ModelSerializer):
             'authors',
             'source',
             'url',
-            'publication_date'
+            'publication_date',
+            'citation_count',
+            'categories',
         ]
 
 class BookmarkedPaperSerializer(serializers.ModelSerializer):
@@ -103,12 +105,32 @@ class BookmarkedPaperSerializer(serializers.ModelSerializer):
 
     def get_user_email(self, obj):
         return obj.user.email if obj.user else 'Deleted User'
+    
+class ReadPaperSerializer(serializers.ModelSerializer):
+    user_email = serializers.SerializerMethodField()
+    paper_details = ResearchPaperBriefSerializer(source='paper', read_only=True)
+    class Meta:
+        model = ReadPaper
+        fields = [
+            'id',
+            'paper',
+            'paper_details',
+            'user_email',
+            'read_at',
+            'notes',
+            'is_active'
+        ]
+        read_only_fields = ['read_at', 'user_email']
+
+    def get_user_email(self, obj):
+        return obj.user.email if obj.user else 'Deleted User'
 
 class ResearchPaperSerializer(serializers.ModelSerializer):
     is_bookmarked = serializers.SerializerMethodField()
+    is_paper_read=serializers.SerializerMethodField()
     bookmark_id = serializers.SerializerMethodField()
     active_bookmarks_count = serializers.SerializerMethodField()
-    bookmarks = BookmarkedPaperSerializer(source='paper_bookmarks', many=True, read_only=True)
+    # bookmarks = BookmarkedPaperSerializer(source='paper_bookmarks', many=True, read_only=True)
 
     class Meta:
         model = ResearchPaper
@@ -126,9 +148,20 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
             'is_bookmarked',
             'bookmark_id',
             'active_bookmarks_count',
-            'bookmarks'
+            # 'bookmarks',
+            'is_paper_read'
+            
         ]
         read_only_fields = ['created_at', 'is_bookmarked', 'bookmark_id', 'active_bookmarks_count']
+
+    def get_is_paper_read(self,obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.paper_readers.filter(
+                user=request.user,
+                is_active=True
+            ).exists()
+        return False
 
     def get_is_bookmarked(self, obj):
         request = self.context.get('request')

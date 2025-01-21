@@ -37,7 +37,7 @@ const jsondatadata=[
         "url": "http://arxiv.org/abs/1309.6848v1",
         "pdf_url": "http://arxiv.org/pdf/1309.6848v1",
         "categories": [
-            "Artificial Intelligence"
+            "Artificial Intelligence,ML"
         ],
         "publication_date": "2025-01-10",
         "created_at": "2025-01-16T09:33:47.567216Z",
@@ -226,3 +226,4 @@ const jsondatadata=[
 
 
 export const data = jsondatadata;
+export const researchData = jsondatadata;

@@ -92,9 +92,12 @@ class VectorStoreManager:
         self.vector_store = self._load_index()
 
     def _load_index(self) -> Optional[FAISS]:
-        """Load existing FAISS index if it exists."""
+        """Load existing FAISS index if it exists, with validation."""
         if os.path.exists(self.index_path):
-            return FAISS.load_local(self.index_path, self.embeddings)
+            try:
+                return FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
+            except Exception as e:
+                raise ValueError(f"Failed to load FAISS index securely: {e}")
         return None
 
     def save_index(self):

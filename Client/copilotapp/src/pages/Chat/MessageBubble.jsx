@@ -27,46 +27,110 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 
 const RichContent = ({ content }) => {
-  // Helper function to detect if content contains HTML
-  const containsHTML = (str) => /<[a-z][\s\S]*>/i.test(str);
+  // Helper function to detect if content contains HTML - improved regex
+  const containsHTML = (str) => {
+    const htmlRegex = /<(?!.*?markdown-renderer)([a-z][a-z0-9]*)\b[^>]*>/i;
+    return htmlRegex.test(str);
+  };
   
   // Helper function to detect if content is a table structure
   const isTableStructure = (str) => {
+    if (typeof str !== 'string') return false;
     try {
       const data = JSON.parse(str);
-      return Array.isArray(data) && data.every(row => typeof row === 'object');
+      return Array.isArray(data) && 
+             data.length > 0 && 
+             data.every(row => row && typeof row === 'object' && !Array.isArray(row));
     } catch {
       return false;
     }
   };
 
-  // Helper function to detect if content is a list (numbered or bullet points)
+  // Helper function to detect if content is a list with improved pattern matching
   const isList = (str) => {
-    const listPattern = /^(\d+\.|[\*\-])\s/m;
-    return listPattern.test(str);
+    if (typeof str !== 'string') return false;
+    const listPattern = /^[ \t]*(?:\d+\.|\*|\-|\+)[ \t]+\S/m;
+    const lines = str.split('\n');
+    return lines.some(line => listPattern.test(line)) && 
+           lines.filter(line => line.trim()).length > 0;
   };
 
-  // Helper function to detect code blocks
+  // Helper function to detect code blocks with improved detection
   const isCodeBlock = (str) => {
-    return str.startsWith('```') || str.includes('class ') || str.includes('function ');
+    if (typeof str !== 'string') return false;
+    const codePatterns = [
+      /^```[\s\S]*```$/m,  // Markdown code blocks
+      /^(class\s+\w+|function\s+\w+|const\s+\w+\s*=\s*(?:function|\([^)]*\)\s*=>))/m,  // Code declarations
+      /^import\s+.*from\s+['"].*['"];?$/m  // Import statements
+    ];
+    return codePatterns.some(pattern => pattern.test(str));
   };
 
-  // Handle different types of content
+  // Helper function to sanitize HTML content
+  const sanitizeHTML = (html) => {
+    // Basic HTML sanitization
+    return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+               .replace(/on\w+="[^"]*"/g, '')
+               .replace(/javascript:/gi, '');
+  };
+
+  // Helper function for parsing markdown-style formatting
+  const parseMarkdown = (text) => {
+    if (typeof text !== 'string') return text;
+    
+    const parts = [];
+    let currentIndex = 0;
+    const markdownRegex = /(\*\*.*?\*\*|\*.*?\*|_.*?_|`.*?`)/g;
+    let match;
+
+    while ((match = markdownRegex.exec(text)) !== null) {
+      // Add text before the match
+      if (match.index > currentIndex) {
+        parts.push(text.slice(currentIndex, match.index));
+      }
+
+      const [fullMatch] = match;
+      if (fullMatch.startsWith('**') && fullMatch.endsWith('**')) {
+        parts.push(<strong key={match.index}>{fullMatch.slice(2, -2)}</strong>);
+      } else if (fullMatch.startsWith('`') && fullMatch.endsWith('`')) {
+        parts.push(<code key={match.index} className="inline-code">{fullMatch.slice(1, -1)}</code>);
+      } else if ((fullMatch.startsWith('*') && fullMatch.endsWith('*')) || 
+                 (fullMatch.startsWith('_') && fullMatch.endsWith('_'))) {
+        parts.push(<em key={match.index}>{fullMatch.slice(1, -1)}</em>);
+      }
+
+      currentIndex = match.index + fullMatch.length;
+    }
+
+    // Add remaining text
+    if (currentIndex < text.length) {
+      parts.push(text.slice(currentIndex));
+    }
+
+    return parts;
+  };
+
+  // Main render function with proper type checking
   const renderContent = () => {
+    if (content === null || content === undefined) {
+      return null;
+    }
+
     if (typeof content !== 'string') {
-      return <Text color='inherit' >{JSON.stringify(content)}</Text>;
+      return <div className="text-inherit">{JSON.stringify(content, null, 2)}</div>;
+    }
+
+    // Handle empty or whitespace-only content
+    if (!content.trim()) {
+      return null;
     }
 
     // Handle HTML content
     if (containsHTML(content)) {
       return (
         <div 
-          dangerouslySetInnerHTML={{ __html: content }}
-          style={{
-            color: 'inherit',
-            maxWidth: '100%',
-            overflow: 'auto'
-          }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHTML(content) }}
+          className="max-w-full overflow-auto text-inherit"
         />
       );
     }
@@ -75,39 +139,36 @@ const RichContent = ({ content }) => {
     if (isTableStructure(content)) {
       try {
         const tableData = JSON.parse(content);
+        const headers = Object.keys(tableData[0]);
+        
         return (
-          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead>
-              <tr>
-                {Object.keys(tableData[0]).map((header, index) => (
-                  <th key={index} style={{ 
-                    border: '1px solid #ddd',
-                    padding: '8px',
-                    backgroundColor: '#f5f5f5'
-                  }}>
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tableData.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {Object.values(row).map((cell, cellIndex) => (
-                    <td key={cellIndex} style={{ 
-                      border: '1px solid #ddd',
-                      padding: '8px'
-                    }}>
-                      {cell}
-                    </td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {headers.map((header, index) => (
+                    <th key={index} className="border border-gray-300 p-2 bg-gray-50 text-inherit">
+                      {header}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {tableData.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {headers.map((header, cellIndex) => (
+                      <td key={cellIndex} className="border border-gray-300 p-2 text-inherit">
+                        {row[header]?.toString() || ''}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         );
       } catch {
-        return <Text color='inherit'>{content}</Text>;
+        return <div className="text-inherit">{content}</div>;
       }
     }
 
@@ -115,25 +176,26 @@ const RichContent = ({ content }) => {
     if (isList(content)) {
       const lines = content.split('\n');
       return (
-        <div style={{ paddingLeft: '20px' }}>
+        <div className="pl-5">
           {lines.map((line, index) => {
-            const isNumbered = /^\d+\.\s/.test(line);
-            const isBullet = /^[\*\-]\s/.test(line);
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return null;
+
+            const isNumbered = /^\d+\.\s/.test(trimmedLine);
+            const isBullet = /^[\*\-\+]\s/.test(trimmedLine);
             
             if (isNumbered || isBullet) {
+              const marker = isNumbered ? trimmedLine.match(/^\d+\./)[0] : '•';
+              const content = trimmedLine.replace(/^(\d+\.|\*|\-|\+)\s+/, '');
+              
               return (
-                <div key={index} style={{ 
-                  marginBottom: '8px',
-                  display: 'flex' 
-                }}>
-                  <span style={{ color:'inherit',marginRight: '8px' }}>
-                    {isNumbered ? line.match(/^\d+\./)[0] : '•'}
-                  </span>
-                  <span >{line.replace(/^(\d+\.|\*|\-)\s/, '')}</span>
+                <div key={index} className="mb-2 flex text-inherit">
+                  <span className="mr-2 min-w-[20px] text-right">{marker}</span>
+                  <span>{parseMarkdown(content)}</span>
                 </div>
               );
             }
-            return <div style={{color:'inherit'}} key={index}>{line}</div>;
+            return <div key={index} className="text-inherit">{parseMarkdown(trimmedLine)}</div>;
           })}
         </div>
       );
@@ -141,44 +203,25 @@ const RichContent = ({ content }) => {
 
     // Handle code blocks
     if (isCodeBlock(content)) {
+      const code = content.replace(/^```\w*\n?/, '').replace(/```$/, '');
       return (
-        <pre style={{
-          backgroundColor: '#f5f5f5',
-          padding: '12px',
-          borderRadius: '4px',
-          overflowX: 'auto',
-          fontFamily: 'monospace',
-          color:'inherit'
-        }}>
-          <code>{content.replace(/^```\w*\n?/, '').replace(/```$/, '')}</code>
+        <pre className="bg-gray-50 p-3 rounded overflow-x-auto font-mono text-inherit">
+          <code>{code}</code>
         </pre>
       );
     }
 
-    // Handle markdown-style text formatting
-    if (content.includes('**') || content.includes('*') || content.includes('_')) {
-      return content.split(/(\*\*.*?\*\*|\*.*?\*|_.*?_)/).map((part, index) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong  key={index}>{part.slice(2, -2)}</strong>;
-        }
-        if ((part.startsWith('*') && part.endsWith('*')) || 
-            (part.startsWith('_') && part.endsWith('_'))) {
-          return <em key={index}>{part.slice(1, -1)}</em>;
-        }
-        return part;
-      });
-    }
-
-    // Default text rendering
-    return <Text style={{color:'inherit'}}>{content}</Text>;
+    // Handle markdown-style text formatting for regular text
+    return <div className="text-inherit">{parseMarkdown(content)}</div>;
   };
 
   return (
-    <div style={{ maxWidth: '100%', overflow: 'hidden',color:'inherit' }}>
+    <div className="max-w-full overflow-hidden text-inherit">
       {renderContent()}
     </div>
   );
 };
+
 
 // Custom hook for intersection observer
 const useIntersectionObserver = (options = {}) => {
@@ -734,30 +777,85 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
       console.error('Download failed:', error);
     }
   }, [downloadFile]);
-
+ 
   const renderContent = () => {
-    if (message.attachments?.length > 0) {
-      return message.attachments.map((attachment, index) => (
-        <FilePreview
-          key={`${attachment.file_path}-${index}`}
-          attachment={attachment}
-          isOwnMessage={isOwnMessage}
-          onDownload={(e) => handleDownload(attachment, e)}
-        />
-      ));
+    const renderAttachmentsGrid = (attachments) => {
+      // Calculate grid layout based on number of attachments
+      const getGridLayout = (count) => {
+        if (count === 1) return { columns: 1, width: '240px' };
+        if (count === 2) return { columns: 2, width: '480px' };
+        if (count === 3) return { columns: 2, width: '480px' }; // 2 in first row, 1 in second
+        return { columns: 2, width: '480px' }; // 2x2 grid for 4 or more
+      };
+  
+      const { columns, width } = getGridLayout(attachments.length);
+  
+      return (
+        <div style={{ 
+          display: 'grid',
+          gridTemplateColumns: `repeat(${columns}, 1fr)`,
+          gap: '8px',
+          maxWidth: width,
+          width: '100%'
+        }}>
+          {attachments.map((attachment, index) => (
+            <FilePreview
+              key={`${attachment.file_path}-${index}`}
+              attachment={attachment}
+              isOwnMessage={isOwnMessage}
+              onDownload={(e) => handleDownload(attachment, e)}
+            />
+          ))}
+        </div>
+      );
+    };
+  
+    if (message.message_type === "MULTIPLE") {
+      return (
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '8px',
+          alignItems: isOwnMessage ? 'flex-end' : 'flex-start',
+        }}>
+          {/* Render text content if exists */}
+          {message.text_content && (
+            <Text style={{
+              display: 'inline-block',
+              padding: '10px 12px',
+              backgroundColor: isOwnMessage ? '#1677ff' : '#ffffff',
+              color: isOwnMessage ? '#ffffff' : '#000000',
+              borderRadius: 16,
+              fontSize: 14,
+              wordBreak: 'break-word'
+            }}>
+              <RichContent content={message.text_content} />
+            </Text>
+          )}
+          
+          {/* Render attachments in grid */}
+          {message.attachments?.length > 0 && renderAttachmentsGrid(message.attachments)}
+        </div>
+      );
     }
-
+  
+    // Handle single attachment messages
+    if (message.attachments?.length > 0) {
+      return renderAttachmentsGrid(message.attachments);
+    }
+  
+    // Handle text-only messages
     return (
       <Text style={{
         display: 'inline-block',
         padding: '10px 12px',
         backgroundColor: isOwnMessage ? '#1677ff' : '#ffffff',
-      color: isOwnMessage ? '#ffffff' : '#000000',
+        color: isOwnMessage ? '#ffffff' : '#000000',
         borderRadius: 16,
         fontSize: 14,
         wordBreak: 'break-word'
       }}>
-       <RichContent  content={message.text_content} />
+        <RichContent content={message.text_content} />
       </Text>
     );
   };

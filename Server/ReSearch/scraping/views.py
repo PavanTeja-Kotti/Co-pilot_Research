@@ -1,3 +1,4 @@
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -5,14 +6,177 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticate
 from django.shortcuts import get_object_or_404
 from rest_framework.pagination import LimitOffsetPagination
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Sum
+
 from django.db.models import Q
-from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike
+from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike,ReadPaper
 from .serializers import (
     ResearchPaperSerializer, 
     BookmarkedPaperSerializer,
     CategorySerializer,
-    CategoryLikeSerializer
+    CategoryLikeSerializer,
+    ReadPaperSerializer
 )
+
+from django.utils import timezone
+from datetime import datetime, timedelta
+from django.db.models import Count, Avg
+from django.db.models.functions import TruncMonth, ExtractMonth
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def statsData(request):
+    if not request.user.is_authenticated:
+        return Response(
+            {'error': 'Authentication required'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Dates for current and previous month
+    now = datetime.now()
+    first_day_this_month = datetime(now.year, now.month, 1)
+    last_day_last_month = first_day_this_month - timedelta(days=1)
+    first_day_last_month = datetime(last_day_last_month.year, last_day_last_month.month, 1)
+
+    # Filter papers for this month and last month
+    readPapersThisMonth = ReadPaper.objects.filter(
+        user=request.user, 
+        read_at__gte=first_day_this_month
+    )
+    readPapersLastMonth = ReadPaper.objects.filter(
+        user=request.user, 
+        read_at__gte=first_day_last_month,
+        read_at__lt=first_day_this_month
+    )
+
+    # Metrics for this month
+    readPapersCountThisMonth = readPapersThisMonth.count()
+    totalCitationCountThisMonth = readPapersThisMonth.aggregate(total=Sum('paper__citation_count'))['total'] or 0
+    avgReadingTimeThisMonth = readPapersThisMonth.aggregate(avg=Avg('paper__average_reading_time'))['avg'] or 0
+
+    # Metrics for last month
+    readPapersCountLastMonth = readPapersLastMonth.count()
+    totalCitationCountLastMonth = readPapersLastMonth.aggregate(total=Sum('paper__citation_count'))['total'] or 0
+    avgReadingTimeLastMonth = readPapersLastMonth.aggregate(avg=Avg('paper__average_reading_time'))['avg'] or 0
+
+    # Calculate Impact Score
+    impactScoreThisMonth = (
+        totalCitationCountThisMonth * 0.5
+        + avgReadingTimeThisMonth * 0.3
+        + readPapersCountThisMonth * 0.2
+    )
+    impactScoreLastMonth = (
+        totalCitationCountLastMonth * 0.5
+        + avgReadingTimeLastMonth * 0.3
+        + readPapersCountLastMonth * 0.2
+    )
+
+    # Helper to calculate trend and percentage change
+    def calculate_trend_and_percentage(current, previous):
+        trend = "up" if current > previous else "down"
+        if previous == 0:
+            percentage_change = "0"  # Avoid division by zero
+        else:
+            percentage_change = f"{((current - previous) / previous) * 100:.1f}%"
+        return trend, percentage_change
+
+    # Calculate trends and percentage changes
+    readPapersTrend, readPapersPercentage = calculate_trend_and_percentage(
+        readPapersCountThisMonth, readPapersCountLastMonth
+    )
+    avgReadingTimeTrend, avgReadingTimePercentage = calculate_trend_and_percentage(
+        avgReadingTimeThisMonth, avgReadingTimeLastMonth
+    )
+    citationTrend, citationPercentage = calculate_trend_and_percentage(
+        totalCitationCountThisMonth, totalCitationCountLastMonth
+    )
+    impactScoreTrend, impactScorePercentage = calculate_trend_and_percentage(
+        impactScoreThisMonth, impactScoreLastMonth
+    )
+
+    # Construct the response data
+    data = [
+        {
+            "title": "Papers Read This Month",
+            "value": readPapersCountThisMonth,
+            "prefix": "BookOutlined",
+            "suffix": readPapersPercentage,
+            "trend": readPapersTrend
+        },
+        {
+            "title": "Average Reading Time",
+            "value": f"{avgReadingTimeThisMonth:.1f}h",
+            "prefix": "ClockCircleOutlined",
+            "suffix": avgReadingTimePercentage,
+            "trend": avgReadingTimeTrend
+        },
+        {
+            "title": "Total Citations",
+            "value": f"{totalCitationCountThisMonth / 1000:.1f}k",
+            "prefix": "StarOutlined",
+            "suffix": citationPercentage,
+            "trend": citationTrend
+        },
+        {
+            "title": "Impact Score",
+            "value": f"{impactScoreThisMonth:.1f}",
+            "prefix": "FireOutlined",
+            "suffix": impactScorePercentage,
+            "trend": impactScoreTrend
+        }
+    ]
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def readPaper(request):
+    if not request.user.is_authenticated:
+        return Response(
+            {'error': 'Authentication required'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    queryset = ReadPaper.objects.filter(user=request.user)
+    serializer = ReadPaperSerializer(queryset, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def toggle_readPaper(request, pk):
+    if not request.user.is_authenticated:
+        return Response(
+            {'error': 'Authentication required'}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    
+    paper = get_object_or_404(ResearchPaper, pk=pk)
+    read = ReadPaper.objects.filter(
+        user=request.user,
+        paper=paper,
+        is_active=True
+    ).first()
+    if read:
+        read.hard_delete()
+        return Response({'status': 'unRead'})
+    else:
+        read = ReadPaper.objects.create(
+            user=request.user,
+            paper=paper,
+            notes=request.data.get('notes', ''),
+            is_active=True
+        )
+        serializer = ReadPaperSerializer(read)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+# Helper function to apply filters to queryset
+   
+    
+
+
 def apply_filters(queryset, request):
     """Apply filters to queryset based on request parameters."""
     filters = {}
@@ -65,9 +229,36 @@ class ResearchPaperPagination(LimitOffsetPagination):
     default_limit = 10
     max_limit = 50
 
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def research_paper_list_withoutPage(request):
+    queryset = ResearchPaper.objects.all()
+    
+    # Apply filters efficiently
+    queryset = apply_filters(queryset, request)
+    
+    # Optimize by only fetching required fields and preloading related data
+    queryset = queryset.only(
+        'id', 'title', 'abstract', 'authors', 'source', 'url', 
+        'pdf_url', 'categories', 'publication_date', 'created_at'
+    ).prefetch_related('bookmarked_by')
+    
+    # Annotate for computed fields
+    queryset = queryset.annotate(
+        active_bookmarks_count=Count('bookmarked_by'),
+        is_bookmarked=Count('bookmarked_by', filter=Q(bookmarked_by=request.user))
+    )
+    
+    serializer = ResearchPaperSerializer(queryset, many=True, context={'request': request})
+    return Response(serializer.data)
+
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
-def research_paper_list(request):
+def research_paper_list_withPage(request):
     if request.method == 'GET':
         queryset = ResearchPaper.objects.all()
         filtered_queryset = apply_filters(queryset, request)
@@ -91,6 +282,63 @@ def research_paper_list(request):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def reading_stats(request):
+    """
+    Get reading statistics by month for the authenticated user.
+    Query Parameters:
+        - year: Optional. Filter stats by year (defaults to current year)
+    """
+    # Get the current year or specified year from query params
+    year = request.query_params.get('year', timezone.now().year)
+    
+    # Get reading stats for the user
+    monthly_stats = (
+        ReadPaper.objects
+        .filter(
+            user=request.user,
+            is_active=True,
+            read_at__year=year
+        )
+        .annotate(
+            month=TruncMonth('read_at')
+        )
+        .values('month')
+        .annotate(
+            papers=Count('id'),
+            avgTime=Avg('paper__average_reading_time')
+        )
+        .order_by('month')
+    )
+
+    # Format the data to match the required structure
+    formatted_stats = []
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    # Create a dictionary of existing data
+    stats_dict = {
+        stat['month'].month: {
+            'papers': stat['papers'],
+            'avgTime': round(stat['avgTime'], 1) if stat['avgTime'] else 0
+        }
+        for stat in monthly_stats
+    }
+    
+    # Fill in all months, using 0 for months with no data
+    for month_num, month_name in enumerate(months, 1):
+        month_data = stats_dict.get(month_num, {'papers': 0, 'avgTime': 0})
+        formatted_stats.append({
+            'month': month_name,
+            'papers': month_data['papers'],
+            'avgTime': month_data['avgTime']
+        })
+
+    return Response(formatted_stats, status=status.HTTP_200_OK)
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticatedOrReadOnly])
@@ -230,14 +478,14 @@ def bookmarked_papers(request):
             status=status.HTTP_401_UNAUTHORIZED
         )
     
-    queryset = ResearchPaper.objects.filter(
-        paper_bookmarks__user=request.user,
-        paper_bookmarks__is_active=True
-    ).distinct()
+    # Get the bookmarks for the authenticated user
+    bookmarks = BookmarkedPaper.objects.filter(user=request.user, is_active=True)
     
-    filtered_queryset = apply_filters(queryset, request)
-    serializer = ResearchPaperSerializer(filtered_queryset, many=True, context={'request': request})
-    return Response(serializer.data)
+    # Serialize the bookmarks using the BookmarkedPaperSerializer
+    serializer = BookmarkedPaperSerializer(bookmarks, many=True)
+    
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
