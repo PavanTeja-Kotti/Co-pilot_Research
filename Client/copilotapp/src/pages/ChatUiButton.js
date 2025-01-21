@@ -331,7 +331,17 @@ const ChatUI = () => {
 
     return (
       <div style={{ display: 'flex', flex: 1 }}>
-        <div style={{ width: '300px', borderRight: '1px solid #1f1f1f' }}>
+        <div style={{ width: '300px', 
+            borderRight: '1px solid #1f1f1f',
+            transition: 'transform 0.3s ease',
+            // transform: selectedChat ? 'translateX(-300px)' : 'translateX(0)',
+            // position: 'absolute',
+            // left: 0,
+            // top: 0,
+            // bottom: 0,
+            // backgroundColor: '#000000',
+            // zIndex: 2 
+            }}>
           <List
             className="chat-list"
             style={styles.chatList}
@@ -365,17 +375,31 @@ const ChatUI = () => {
             )}
           />
         </div>
-        {selectedChat && (
-          <ChatView
-            chat={selectedChat}
-            onBack={() => setSelectedChat(null)}
-            message={message}
-            setMessage={setMessage}
-            onSendMessage={handleSendMessage}
-            onFileUpload={handleFileUpload}
-            messagesEndRef={messagesEndRef}
-          />
-        )}
+        <div 
+          style={{ 
+            position: 'absolute',
+            left: 360,
+            right: 0,
+            top: 73,
+            bottom: 0,
+            backgroundColor: '#000000',
+            transform: selectedChat ? 'translateX(0)' : 'translateX(100%)',
+            transition: 'transform 0.3s ease',
+            // zIndex: 1
+          }}
+        >
+          {selectedChat && (
+            <ChatView
+              chat={selectedChat}
+              onBack={() => setSelectedChat(null)}
+              message={message}
+              setMessage={setMessage}
+              onSendMessage={handleSendMessage}
+              onFileUpload={handleFileUpload}
+              messagesEndRef={messagesEndRef}
+            />
+          )}
+        </div>
       </div>
     );
   };
@@ -383,6 +407,7 @@ const ChatUI = () => {
   return (
     <>
       <div style={styles.container}>
+        
         <Button
           type="primary"
           shape="circle"

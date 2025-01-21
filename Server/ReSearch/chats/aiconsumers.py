@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from enum import Enum
 import uuid
+
+from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 from dataclasses import dataclass, asdict, field
 from abc import ABC, abstractmethod
@@ -203,7 +205,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             if user_id in self.chatbot_instances:
                 # Clean up FAISS indices
                 for session_id, chatbot in self.chatbot_instances[user_id].items():
-                    index_path = f'faiss_index_{user_id}_{session_id}'
+                    index_path=os.path.join(settings.BASE_DIR, f'FissIndex/faiss_index_{user_id}_{session_id}')
                     if os.path.exists(index_path):
                         shutil.rmtree(index_path)
                 del self.chatbot_instances[user_id]
@@ -291,7 +293,13 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-                asyncio.create_task(self.process_ai_response(message['text_content'], session_id, message))
+                asyncio.create_task(
+                    
+                        self.process_ai_response(message['text_content'], session_id, message)
+                )
+                    
+                    
+                    
                 
         except json.JSONDecodeError:
             logger.error("Invalid JSON in chat message")
@@ -355,17 +363,24 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             return None
 
     async def initialize_chatbot(self, user_id: str, session_id: str):
-        """Initialize a new PDFChatbot instance for a session"""
+        """Initialize a new PDFChatbot instance for a session."""
         if user_id not in self.chatbot_instances:
             self.chatbot_instances[user_id] = {}
         
         if session_id not in self.chatbot_instances[user_id]:
             groq_api_key = os.getenv('GROQ_API_KEY') or "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"  # Make sure to set this in your environment
-            index_path = f'faiss_index_{user_id}_{session_id}'  
-            self.chatbot_instances[user_id][session_id] = pdfchatBot.PDFChatbot(
-                groq_api_key=groq_api_key,
-                index_path=index_path
-            )
+            index_path = f'faiss_index_{user_id}_{session_id}'
+            
+            try:
+                self.chatbot_instances[user_id][session_id] = await asyncio.to_thread(
+                    pdfchatBot.PDFChatbot,
+                    groq_api_key=groq_api_key,
+                    index_path=index_path
+                )
+            except Exception as e:
+                logger.error(f"Error initializing chatbot for session {session_id}: {e}", exc_info=True)
+                raise
+
 
     async def process_ai_response(self, user_message: str, session_id: str, message: Dict):
         try:

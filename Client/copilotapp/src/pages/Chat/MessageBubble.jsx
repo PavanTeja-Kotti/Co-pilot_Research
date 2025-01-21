@@ -320,49 +320,53 @@ const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
   }, [fileUrl, visible, fileType]);
 
   const loadPdfPreview = async () => {
-    if (!fileUrl) return;
-    
+    if (!fileUrl) {
+      setError("File URL is missing");
+      return;
+    }
+  
     try {
       setLoading(true);
       setError(null);
-      
-      // Import both pdfjs library and worker
-      const pdfjsLib = await import('pdfjs-dist/build/pdf');
-      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.entry');
-      
+  
+      // Dynamically import pdfjs and worker
+      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf");
+      const pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.entry");
+  
       // Set up the worker
-      pdfjsLib.GlobalWorkerOptions.workerPort = new pdfjsWorker.default();
-      
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
+  
+      // Load the PDF document
       const loadingTask = pdfjsLib.getDocument(fileUrl);
       const pdf = await loadingTask.promise;
       const totalPages = pdf.numPages;
-      const pagesPromises = [];
-      
-      for (let i = 1; i <= Math.min(totalPages, 3); i++) {
-        const page = await pdf.getPage(i);
+  
+      const pagesPromises = Array.from({ length: Math.min(totalPages, 3) }, async (_, i) => {
+        const page = await pdf.getPage(i + 1);
         const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
+  
+        // Create a canvas element for rendering
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
         canvas.width = viewport.width;
-        
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-        
-        pagesPromises.push(canvas.toDataURL());
-      }
-      
-      setPdfPages(await Promise.all(pagesPromises));
+        canvas.height = viewport.height;
+  
+        await page.render({ canvasContext: context, viewport }).promise;
+  
+        // Convert canvas to data URL and return
+        return canvas.toDataURL();
+      });
+  
+      const pdfPages = await Promise.all(pagesPromises);
+      setPdfPages(pdfPages);
     } catch (error) {
-      console.error('Error loading PDF:', error);
-      setError('Failed to load PDF preview');
+      console.error("Error loading PDF:", error);
+      setError("Failed to load PDF preview");
     } finally {
       setLoading(false);
     }
   };
-
+  
   const renderPreview = () => {
     switch (fileType) {
       case 'IMAGE':

@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Add upload directory path
 UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
+FissIndex = os.path.join(BASE_DIR, 'fissIndex')
 # SECURITY WARNING: keep the secret key used in production secret!
 # SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'your-development-key')
 
