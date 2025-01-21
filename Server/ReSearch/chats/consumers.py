@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
+import os
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import Prefetch
 from django.db.models import Q
+from typing import Dict, List, Optional, Any
 import uuid
 from .models import (
     
@@ -27,8 +29,78 @@ from .serializers import (
 )
 from django.db import models
 from . import middleware
+from . import pdfchatBot
+from datetime import datetime, timedelta
+
+
 
 logger = logging.getLogger(__name__)
+
+class ChatbotCacheManager:
+    """Manages chatbot instances with automatic cleanup"""
+    def __init__(self, cleanup_interval=300, max_inactive_time=1800):  # 5 min cleanup, 30 min max inactive
+        self.chatbots = {}  # {group_id: {'bot': chatbot, 'last_accessed': timestamp}}
+        self.cleanup_interval = cleanup_interval
+        self.max_inactive_time = max_inactive_time
+        self.cleanup_task = None
+
+    def get(self, group_id):
+        """Get chatbot instance and update last access time"""
+        if group_id in self.chatbots:
+            self.chatbots[group_id]['last_accessed'] = datetime.now()
+            return self.chatbots[group_id]['bot']
+        return None
+
+    def set(self, group_id, chatbot):
+        """Set chatbot instance with current timestamp"""
+        self.chatbots[group_id] = {
+            'bot': chatbot,
+            'last_accessed': datetime.now()
+        }
+        
+    def remove(self, group_id):
+        """Remove chatbot instance"""
+        if group_id in self.chatbots:
+            del self.chatbots[group_id]
+
+    async def start_cleanup(self):
+        """Start the cleanup task"""
+        if self.cleanup_task is None:
+            self.cleanup_task = asyncio.create_task(self._cleanup_loop())
+            
+    async def stop_cleanup(self):
+        """Stop the cleanup task"""
+        if self.cleanup_task:
+            self.cleanup_task.cancel()
+            try:
+                await self.cleanup_task
+            except asyncio.CancelledError:
+                pass
+            self.cleanup_task = None
+
+    async def _cleanup_loop(self):
+        """Periodically clean up inactive chatbot instances"""
+        while True:
+            try:
+                await asyncio.sleep(self.cleanup_interval)
+                self._cleanup_inactive()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in cleanup loop: {str(e)}")
+                await asyncio.sleep(self.cleanup_interval)
+
+    def _cleanup_inactive(self):
+        """Remove inactive chatbot instances"""
+        current_time = datetime.now()
+        inactive_groups = [
+            group_id for group_id, data in self.chatbots.items()
+            if (current_time - data['last_accessed']).total_seconds() > self.max_inactive_time
+        ]
+        
+        for group_id in inactive_groups:
+            logger.info(f"Cleaning up inactive chatbot for group {group_id}")
+            self.remove(group_id)
 
 class BaseChatConsumer(AsyncWebsocketConsumer):
     """Base consumer for shared functionality"""
@@ -52,6 +124,396 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error serializing message: {str(e)}")
             return None
+        
+class GroupChatConsumer(BaseChatConsumer):
+    """Consumer for group chats"""
+    _cache_manager = ChatbotCacheManager()
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    async def connect(self):
+        """Handle connection and start cleanup if needed"""
+        if not await super().connect():
+            return
+            
+        try:
+            self.group_id = self.scope['url_route']['kwargs']['group_id']
+            logger.info(f"Connecting to group chat: {self.group_id}")
+            
+            # Start cleanup task if not already running
+            await self._cache_manager.start_cleanup()
+            
+            is_member = await self.verify_membership()
+            if not is_member:
+                logger.error(f"User not member of group: {self.group_id}")
+                await self.close()
+                return
+                
+            self.chat_group = f'group_{self.group_id}'
+            await self.channel_layer.group_add(
+                self.chat_group,
+                self.channel_name
+            )
+            
+            await self.accept()
+            logger.info(f"Connected to group chat: {self.group_id}")
+            
+        except Exception as e:
+            logger.error(f"Error in group chat connect: {str(e)}", exc_info=True)
+            await self.close()
+
+    async def get_or_create_chatbot(self, group_id):
+        """Get existing chatbot instance or create new one"""
+        chatbot = self._cache_manager.get(group_id)
+        groq_api_key = os.getenv('GROQ_API_KEY') or "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"  # Make sure to set this in your environment
+        if not chatbot:
+            chatbot = pdfchatBot.PDFChatbot(
+                groq_api_key=groq_api_key,
+                index_path=f"faiss_index_group_{group_id}"
+            )
+            self._cache_manager.set(group_id, chatbot)
+            # chatbot.vector_store_manager.load_vectors()
+            # Load chat history from existing messages
+            await self.load_chat_history(group_id)
+            
+        return chatbot
+
+    @database_sync_to_async
+    def load_chat_history(self, group_id):
+        """Load chat history from existing messages"""
+        try:
+            chatbot = self._cache_manager.get(group_id)
+            if not chatbot:
+                return
+                
+            messages = Message.objects.filter(
+                group_chat_id=group_id
+            ).filter(
+                Q(text_content__istartswith='@bot') |
+                Q(sender__email='bot@gmail.com')
+            ).order_by('-created_at')[:50]
+            print(messages)
+            
+            for msg in reversed(messages):
+                question_text = msg.text_content
+                if msg.sender.email != 'bot@gmail.com' and question_text:
+                    question_text = question_text.lstrip('@bot').strip()
+                
+                chatbot.chat_history.append(
+                    pdfchatBot.ChatHistory(
+                        question=question_text if msg.sender.email != 'bot@gmail.com' else "",
+                        answer=msg.text_content if msg.sender.email == 'bot@gmail.com' else ""
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Error loading chat history: {str(e)}")
+
+    async def disconnect(self, close_code):
+        """Handle disconnection"""
+        if hasattr(self, 'chat_group'):
+            await self.channel_layer.group_discard(
+                self.chat_group,
+                self.channel_name
+            )
+        logger.info(f"Disconnected from group chat: {self.group_id}")
+
+    async def receive(self, text_data):
+        """Handle received messages"""
+        try:
+            data = json.loads(text_data)
+            
+            # Verify user is still an active member
+            is_member = await self.verify_membership()
+            if not is_member:
+                logger.warning(f"User no longer member of group: {self.group_id}")
+                await self.send(json.dumps({
+                    'type': 'error',
+                    'message': 'You are no longer a member of this group'
+                }))
+                return
+            
+            message_type = data.get('message_type', MessageType.TEXT)
+            if not validate_message_data(message_type, data):
+                await self.send(json.dumps({
+                    'type': 'error',
+                    'message': 'Invalid message data'
+                }))
+                return
+
+            message = await self.save_message(data)
+            message_data = None
+            
+            if message:
+                message_data = await self.get_message_data(message)
+                await self.channel_layer.group_send(
+                    self.chat_group,
+                    {
+                        'type': 'chat_message',
+                        'message': message_data
+                    }
+                )
+           
+            mention = data.get('mention', [])
+            if mention and any(d.get('name', '').lower() == 'bot' for d in mention):
+                asyncio.create_task(self.handle_ai_response(data, message_data, self.group_id))
+                
+            
+                
+        
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON in group message")
+            await self.send(json.dumps({
+                'type': 'error',
+                'message': 'Invalid message format'
+            }))
+        except Exception as e:
+            logger.error(f"Error handling group message: {str(e)}", exc_info=True)
+            await self.send(json.dumps({
+                'type': 'error',
+                'message': 'Internal server error'
+            }))
+
+    @database_sync_to_async
+    def processAIResponse(self, lastMessage, content, group_id):
+        
+        bot=middleware.User.objects.get(email='bot@gmail.com')
+        if not bot:
+            return None
+
+        message = Message.objects.create(
+                sender=bot,
+                group_chat_id=group_id,
+                text_content=lastMessage,
+                content=content or {},
+                message_type=MessageType.TEXT
+            )
+        message.save()
+        active_members = message.group_chat.members.exclude(
+                id=bot.id
+            ).filter(
+                groupmembership__is_active=True,
+                groupmembership__left_at__isnull=True
+            ).distinct()
+            # Bulk create receipts
+        receipts = [
+                MessageReceipt(
+                    message=message,
+                    user=member
+                ) for member in active_members
+            ]
+        MessageReceipt.objects.bulk_create(receipts)
+            
+        return message
+
+
+    async def handle_ai_response(self, lastMessage, message_data, group_id):
+        try:
+            print(message_data)
+            chatbot = await self.get_or_create_chatbot(group_id)
+            if not chatbot:
+                return
+            
+            if message_data['attachments']:
+                    file_path = message_data['attachments'][0]['file_path']
+                    if file_path:
+                        # Process PDF and get summary
+                        print("Processing PDF...",file_path)
+                        summary = await asyncio.to_thread(chatbot.process_pdf, file_path)
+                        if summary:
+                            message = await self.processAIResponse(
+                                group_id=group_id,
+                                content={},
+                                lastMessage=summary)
+                            if message:
+                                message_data = await self.get_message_data(message)
+                                await self.channel_layer.group_send(
+                                    self.chat_group,
+                                    {
+                                        'type': 'chat_message',
+                                        'message': message_data
+                                    }
+                                )
+                                
+            if message_data['text_content'].lstrip('@bot').strip():
+                # Process text message and get response
+                response = await asyncio.to_thread(chatbot.ask_question, message_data['text_content'].lstrip('@bot').strip())
+                if response:
+                    message = await self.processAIResponse(
+                        group_id=group_id,
+                        content={},
+                        lastMessage=response)
+                    if message:
+                        message_data = await self.get_message_data(message)
+                        await self.channel_layer.group_send(
+                            self.chat_group,
+                            {
+                                'type': 'chat_message',
+                                'message': message_data
+                            }
+                        )
+
+        except Exception as e:
+            logger.error(f"Error in AI response: {str(e)}", exc_info=True)
+            message = await self.processAIResponse(
+                group_id=group_id,
+                content={},
+                lastMessage="Sorry, I encountered an error processing your request.")
+            if message:
+                message_data = await self.get_message_data(message)
+                await self.channel_layer.group_send(
+                    self.chat_group,
+                    {
+                        'type': 'chat_message',
+                        'message': message_data
+                    }
+                )
+            
+        
+        
+
+
+
+      
+    @database_sync_to_async
+    def verify_membership(self):
+        """Verify user is an active member of the group"""
+        try:
+            group = GroupChat.objects.get(id=self.group_id)
+            return (group.is_active and 
+                   GroupMembership.objects.filter(
+                       group_id=self.group_id,
+                       user=self.user,
+                       is_active=True,
+                       left_at__isnull=True
+                   ).exists())
+        except GroupChat.DoesNotExist:
+            logger.error(f"Group not found: {self.group_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Error verifying group membership: {str(e)}")
+            return False
+
+    @database_sync_to_async
+    def save_message(self, data):
+        """Save message to database"""
+        try:
+
+
+            # Create the message
+            message_type = data.get('message_type', MessageType.TEXT)
+            content = data.get('content', {})
+            message = Message.objects.create(
+                
+                sender=self.user,
+                group_chat_id=self.group_id,
+                text_content=data.get('text'),
+                content=content,
+                message_type=data.get('message_type', MessageType.TEXT)
+            )
+            
+           
+            # Handle different message types
+            if message_type == MessageType.TEXT:
+                message.text_content = data.get('text')
+                
+            elif message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
+                # Handle file attachments
+                file_data = data.get('file', {})
+                attachment = MessageAttachment.objects.create(
+                        file_path=file_data.get('path'),
+                        file_name=file_data.get('name'),
+                        file_size=file_data.get('size', 0),
+                        file_type=file_data.get('type')
+                )
+                message.save()  # Save message first to get ID
+                message.attachments.add(attachment)
+                
+            elif message_type == MessageType.MULTIPLE:
+                # Handle file attachments
+                message.text_content = data.get('text', '')
+                file_data = data.get('file', [])
+                if file_data:
+                    message.save()  # Save message first to get ID
+                for fileresult in file_data:
+                    file=fileresult.get('result')
+                    attachment = MessageAttachment.objects.create(
+                        file_path=file.get('path'),
+                        file_name=file.get('name'),
+                        file_size=file.get('size', 0),
+                        file_type=file.get('type')
+                    )
+                    message.attachments.add(attachment)
+                    
+            elif message_type == MessageType.LOCATION:
+                message.content = {
+                    'latitude': data.get('latitude'),
+                    'longitude': data.get('longitude'),
+                    'address': data.get('address', '')
+                }
+
+            elif message_type == MessageType.CONTACT:
+                message.content = {
+                    'name': data.get('contact_name'),
+                    'phone': data.get('contact_phone'),
+                    'email': data.get('contact_email', ''),
+                    'additional_info': data.get('additional_info', {})
+                }
+
+            elif message_type == MessageType.STICKER:
+                message.content = {
+                    'sticker_id': data.get('sticker_id'),
+                    'pack_id': data.get('pack_id', ''),
+                    'sticker_metadata': data.get('sticker_metadata', {})
+                }
+
+            elif message_type == MessageType.SYSTEM:
+                message.content = {
+                    'action': data.get('action'),
+                    'metadata': data.get('metadata', {})
+                }
+
+            # Save the message
+            message.save()
+           
+            active_members = message.group_chat.members.exclude(
+                id=self.user.id
+            ).filter(
+                groupmembership__is_active=True,
+                groupmembership__left_at__isnull=True
+            ).distinct()
+
+            
+            # Bulk create receipts
+            receipts = [
+                MessageReceipt(
+                    message=message,
+                    user=member
+                ) for member in active_members
+            ]
+            MessageReceipt.objects.bulk_create(receipts)
+            
+            return message
+        except Exception as e:
+            logger.error(f"Error saving group message: {str(e)}")
+            return None
+
+    async def chat_message(self, event):
+        """Handle chat messages"""
+        await self.send(json.dumps({
+            'type': 'message',
+            'message': event['message']
+        }))
+
+    async def group_update(self, event):
+        """Handle group update notifications"""
+        await self.send(json.dumps({
+            'type': 'group_update',
+            'group_id': event['group_id'],
+            'update_type': event['update_type'],
+            'data': event.get('data', {})
+        }))
+
 
 class ChatManagementConsumer(AsyncWebsocketConsumer):
     """Consumer for managing chat and group creation/deletion"""
@@ -619,6 +1081,7 @@ class ChatConsumer(BaseChatConsumer):
             
             # Validate required fields based on message type
             message_type = data.get('message_type', MessageType.TEXT)
+            print(data)
             if not validate_message_data(message_type, data):
                 await self.send(json.dumps({
                     'type': 'error',
@@ -689,15 +1152,29 @@ class ChatConsumer(BaseChatConsumer):
                 
             elif message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
                 # Handle file attachments
-                file_data = data.get('file', {})
-                if file_data:
-                    attachment = MessageAttachment.objects.create(
+                file_data = data.get('file', [])
+                attachment = MessageAttachment.objects.create(
                         file_path=file_data.get('path'),
                         file_name=file_data.get('name'),
                         file_size=file_data.get('size', 0),
                         file_type=file_data.get('type')
                     )
+                message.save()  # Save message first to get ID
+                message.attachments.add(attachment)
+            elif message_type == MessageType.MULTIPLE:
+                # Handle file attachments
+                message.text_content = data.get('text', '')
+                file_data = data.get('file', [])
+                if file_data:
                     message.save()  # Save message first to get ID
+                for fileresult in file_data:
+                    file=fileresult.get('result')
+                    attachment = MessageAttachment.objects.create(
+                        file_path=file.get('path'),
+                        file_name=file.get('name'),
+                        file_size=file.get('size', 0),
+                        file_type=file.get('type')
+                    )
                     message.attachments.add(attachment)
 
             elif message_type == MessageType.LOCATION:
@@ -751,251 +1228,6 @@ class ChatConsumer(BaseChatConsumer):
             'message': event['message']
         }))
 
-class GroupChatConsumer(BaseChatConsumer):
-    """Consumer for group chats"""
-    
-    async def connect(self):
-        """Handle group chat connection"""
-        if not await super().connect():
-            return
-            
-        try:
-            self.group_id = self.scope['url_route']['kwargs']['group_id']
-            logger.info(f"Connecting to group chat: {self.group_id}")
-            
-            is_member = await self.verify_membership()
-            if not is_member:
-                logger.error(f"User not member of group: {self.group_id}")
-                await self.close()
-                return
-                
-            self.chat_group = f'group_{self.group_id}'
-            await self.channel_layer.group_add(
-                self.chat_group,
-                self.channel_name
-            )
-            
-            await self.accept()
-            logger.info(f"Connected to group chat: {self.group_id}")
-            
-        except Exception as e:
-            logger.error(f"Error in group chat connect: {str(e)}", exc_info=True)
-            await self.close()
-
-    async def disconnect(self, close_code):
-        """Handle disconnection"""
-        if hasattr(self, 'chat_group'):
-            await self.channel_layer.group_discard(
-                self.chat_group,
-                self.channel_name
-            )
-        logger.info(f"Disconnected from group chat: {self.group_id}")
-
-    async def receive(self, text_data):
-        """Handle received messages"""
-        try:
-            data = json.loads(text_data)
-            
-            # Verify user is still an active member
-            is_member = await self.verify_membership()
-            if not is_member:
-                logger.warning(f"User no longer member of group: {self.group_id}")
-                await self.send(json.dumps({
-                    'type': 'error',
-                    'message': 'You are no longer a member of this group'
-                }))
-                return
-            
-            message_type = data.get('message_type', MessageType.TEXT)
-            if not validate_message_data(message_type, data):
-                await self.send(json.dumps({
-                    'type': 'error',
-                    'message': 'Invalid message data'
-                }))
-                return
-
-            message = await self.save_message(data)
-            message_data = None
-            
-            if message:
-                message_data = await self.get_message_data(message)
-                await self.channel_layer.group_send(
-                    self.chat_group,
-                    {
-                        'type': 'chat_message',
-                        'message': message_data
-                    }
-                )
-           
-            mention = data.get('mention', [])
-            if mention and any(d.get('name', '').lower() == 'bot' for d in mention):
-               
-                asyncio.create_task(self.handle_ai_response(data, message_data, self.group_id))
-                
-            
-                
-        
-        except json.JSONDecodeError:
-            logger.error("Invalid JSON in group message")
-            await self.send(json.dumps({
-                'type': 'error',
-                'message': 'Invalid message format'
-            }))
-        except Exception as e:
-            logger.error(f"Error handling group message: {str(e)}", exc_info=True)
-            await self.send(json.dumps({
-                'type': 'error',
-                'message': 'Internal server error'
-            }))
-
-
-    @database_sync_to_async
-    def processAIResponse(self, lastMessage, message_data, group_id):
-        # Synchronous database operations go here
-        # Remove the asyncio.sleep and async/await syntax
-        message_data['id']=str(uuid.uuid4())
-        return message_data
-
-    async def handle_ai_response(self, lastMessage, message_data, group_id):
-        # This is where you put your async operations
-        await asyncio.sleep(5)
-        processed_data = await self.processAIResponse(lastMessage, message_data, group_id)
-        await self.channel_layer.group_send(
-            self.chat_group,
-            {
-                'type': 'chat_message',
-                'message': processed_data
-            }
-        )
-
-
-
-
-      
-    @database_sync_to_async
-    def verify_membership(self):
-        """Verify user is an active member of the group"""
-        try:
-            group = GroupChat.objects.get(id=self.group_id)
-            return (group.is_active and 
-                   GroupMembership.objects.filter(
-                       group_id=self.group_id,
-                       user=self.user,
-                       is_active=True,
-                       left_at__isnull=True
-                   ).exists())
-        except GroupChat.DoesNotExist:
-            logger.error(f"Group not found: {self.group_id}")
-            return False
-        except Exception as e:
-            logger.error(f"Error verifying group membership: {str(e)}")
-            return False
-
-    @database_sync_to_async
-    def save_message(self, data):
-        """Save message to database"""
-        try:
-
-
-            # Create the message
-            message_type = data.get('message_type', MessageType.TEXT)
-            content = data.get('content', {})
-            message = Message.objects.create(
-                
-                sender=self.user,
-                group_chat_id=self.group_id,
-                text_content=data.get('text'),
-                content=content,
-                message_type=data.get('message_type', MessageType.TEXT)
-            )
-            
-            # Create receipts for other active members
-
-            # Handle different message types
-            if message_type == MessageType.TEXT:
-                message.text_content = data.get('text')
-                
-            elif message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
-                # Handle file attachments
-                file_data = data.get('file', {})
-                if file_data:
-                    attachment = MessageAttachment.objects.create(
-                        file_path=file_data.get('path'),
-                        file_name=file_data.get('name'),
-                        file_size=file_data.get('size', 0),
-                        file_type=file_data.get('type')
-                    )
-                    message.save()  # Save message first to get ID
-                    message.attachments.add(attachment)
-
-            elif message_type == MessageType.LOCATION:
-                message.content = {
-                    'latitude': data.get('latitude'),
-                    'longitude': data.get('longitude'),
-                    'address': data.get('address', '')
-                }
-
-            elif message_type == MessageType.CONTACT:
-                message.content = {
-                    'name': data.get('contact_name'),
-                    'phone': data.get('contact_phone'),
-                    'email': data.get('contact_email', ''),
-                    'additional_info': data.get('additional_info', {})
-                }
-
-            elif message_type == MessageType.STICKER:
-                message.content = {
-                    'sticker_id': data.get('sticker_id'),
-                    'pack_id': data.get('pack_id', ''),
-                    'sticker_metadata': data.get('sticker_metadata', {})
-                }
-
-            elif message_type == MessageType.SYSTEM:
-                message.content = {
-                    'action': data.get('action'),
-                    'metadata': data.get('metadata', {})
-                }
-
-            # Save the message
-            message.save()
-           
-            active_members = message.group_chat.members.exclude(
-                id=self.user.id
-            ).filter(
-                groupmembership__is_active=True,
-                groupmembership__left_at__isnull=True
-            ).distinct()
-
-            
-            # Bulk create receipts
-            receipts = [
-                MessageReceipt(
-                    message=message,
-                    user=member
-                ) for member in active_members
-            ]
-            MessageReceipt.objects.bulk_create(receipts)
-            
-            return message
-        except Exception as e:
-            logger.error(f"Error saving group message: {str(e)}")
-            return None
-
-    async def chat_message(self, event):
-        """Handle chat messages"""
-        await self.send(json.dumps({
-            'type': 'message',
-            'message': event['message']
-        }))
-
-    async def group_update(self, event):
-        """Handle group update notifications"""
-        await self.send(json.dumps({
-            'type': 'group_update',
-            'group_id': event['group_id'],
-            'update_type': event['update_type'],
-            'data': event.get('data', {})
-        }))
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     """Consumer for handling user notifications"""
@@ -1090,6 +1322,9 @@ def validate_message_data( message_type, data):
                 
             elif message_type == MessageType.SYSTEM:
                 return bool(data.get('action'))
+            
+            elif message_type== MessageType.MULTIPLE:
+                return True
                 
             return False
             

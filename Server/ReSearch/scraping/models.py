@@ -12,7 +12,11 @@ class ResearchPaper(models.Model):
     pdf_url = models.URLField(null=True, blank=True)
     categories = models.JSONField(default=list)
     publication_date = models.DateField()
+    citation_count = models.PositiveIntegerField(default=0)
+    average_reading_time = models.PositiveIntegerField(null=True, blank=True,default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     bookmarked_by = models.ManyToManyField(
         settings.AUTH_USER_MODEL, 
         through='BookmarkedPaper', 
@@ -28,6 +32,41 @@ class ResearchPaper(models.Model):
             models.Index(fields=['-publication_date']),
             models.Index(fields=['source']),
         ]
+
+class ReadPaper(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='user_read_papers'
+    )
+    paper = models.ForeignKey(
+        ResearchPaper, 
+        on_delete=models.PROTECT,
+        related_name='paper_readers'
+    )
+    read_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('user', 'paper')
+        ordering = ['-read_at']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['paper', 'is_active']),
+        ]
+
+    def __str__(self):
+        user_email = self.user.email if self.user else 'Deleted User'
+        return f"{user_email} - {self.paper.title}"
+
+    def soft_delete(self):
+        self.is_active = False
+        self.save()
+    def hard_delete(self):
+        super().delete()
 
 class BookmarkedPaper(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

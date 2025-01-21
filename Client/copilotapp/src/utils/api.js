@@ -190,6 +190,16 @@ class ScrapingService {
         this.endpoint = '/scraping';
     }
 
+    async getPapaerWithoutPagination(filters={}) {
+        const queryParams = new URLSearchParams();
+
+        Object.keys(filters).forEach(key => {
+            if (filters[key]) {
+                queryParams.append(key, filters[key]);
+            }
+        });
+        return this.baseService.request(`${this.endpoint}/papers/withoutpage/?${queryParams.toString()}`);
+    }
     // Get papers with pagination and filters
     async getPapers(offset = 0, limit = 10, filters = {}) {
         // Build query parameters
@@ -200,21 +210,16 @@ class ScrapingService {
         queryParams.append('limit', limit);
         
         // Add filters only if they have values
-        if (filters.search?.trim()) {
-            queryParams.append('search', filters.search.trim());
-        }
+        Object.keys(filters).forEach(key => {
+            if (filters[key]) {
+                queryParams.append(key, filters[key].trim());
+            }
+        });
         
-        if (filters.category?.trim()) {
-            queryParams.append('categories', filters.category.trim());
-        }
-        
-        if (filters.source?.trim()) {
-            queryParams.append('source', filters.source.trim());
-        }
 
         // Make the request
         return this.baseService.request(
-            `${this.endpoint}/papers/?${queryParams.toString()}`,
+            `${this.endpoint}/recomendation_paper_list/?${queryParams.toString()}`,
             { method: 'GET' }
         );
     }
@@ -234,6 +239,33 @@ class ScrapingService {
             { method: 'POST' }
         );
     }
+
+    async statsdata(){
+        return this.baseService.request(
+            `${this.endpoint}/papers/statsdata/`
+        )
+    }
+    
+
+    async toggleRead(paperId) {
+        return this.baseService.request(
+            `${this.endpoint}/papers/${paperId}/readpaper/`,
+            { method: 'POST' }
+        );
+    }
+
+    async getbookmarked(){
+        return this.baseService.request(
+            `${this.endpoint}/papers/bookmarked/`
+        )
+    }
+
+    async readingstats(){
+        return this.baseService.request(
+            `${this.endpoint}/papers/readingstats/`
+        )
+    }
+
 
     // Get paper summarization
     async getPaperSummarization(url) {

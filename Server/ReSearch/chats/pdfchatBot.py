@@ -1,12 +1,12 @@
 from datetime import datetime
 import os
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 from urllib.parse import urlparse
 import requests
-
+import pdfplumber
 import PyPDF2
 from groq import Groq
 from langchain_community.vectorstores import FAISS
@@ -38,9 +38,8 @@ class PDFProcessor:
         """
         try:
             response = requests.get(self.pdf_source, stream=True)
-            response.raise_for_status()  # Raise exception for bad status codes
+            response.raise_for_status()
             
-            # Create temporary file with .pdf extension
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
             temp_file.write(response.content)
             temp_file.close()
@@ -69,22 +68,64 @@ class PDFProcessor:
                 for page in reader.pages:
                     text += page.extract_text()
 
-            # Clean up temporary file if it was downloaded
             if self.is_url:
                 os.unlink(temp_path)
 
             return text
-        except (PyPDF2.PdfReadError, OSError) as e:
+        except (PyPDF2.errors.PdfReadError, OSError) as e:
             raise ValueError(f"Failed to read PDF: {str(e)}")
         except Exception as e:
             raise ValueError(f"Unexpected error processing PDF: {str(e)}")
+
+    def extract_tables(self) -> List[List[List[str]]]:
+        """
+        Extract tables from a PDF file, whether local or from a URL.
+
+        Returns:
+            List[List[List[str]]]: Extracted tables as nested lists.
+        """
+        try:
+            if self.is_url:
+                temp_path = self._download_pdf()
+                pdf_path = temp_path
+            else:
+                pdf_path = self.pdf_source
+
+            tables = []
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    tables.extend(page.extract_tables())
+
+            if self.is_url:
+                os.unlink(temp_path)
+
+            return tables
+        except Exception as e:
+            raise ValueError(f"Error extracting tables: {str(e)}")
+
+    def process_table(self, tables: List[List[List[str]]]) -> List[Document]:
+        """
+        Convert extracted tables into Document objects for indexing.
+
+        Args:
+            tables: List of tables, where each table is a list of rows.
+
+        Returns:
+            List[Document]: List of processed table documents.
+        """
+        table_documents = []
+        for table in tables:
+            for row in table:
+                row_content = " | ".join([str(cell) for cell in row])  # Convert row to a string
+                table_documents.append(Document(page_content=f"Table Row: {row_content}"))
+        return table_documents
 
     def create_chunks(self, text: str, chunk_size: int = 500) -> List[str]:
         """Split text into chunks of specified size."""
         return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 class VectorStoreManager:
-    def __init__(self, index_path: str = 'faiss_index'):
+    def __init__(self, index_path: str):
         self.index_path = index_path
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -92,9 +133,12 @@ class VectorStoreManager:
         self.vector_store = self._load_index()
 
     def _load_index(self) -> Optional[FAISS]:
-        """Load existing FAISS index if it exists."""
+        """Load existing FAISS index if it exists, with validation."""
         if os.path.exists(self.index_path):
-            return FAISS.load_local(self.index_path, self.embeddings)
+            try:
+                return FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
+            except Exception as e:
+                raise ValueError(f"Failed to load FAISS index securely: {e}")
         return None
 
     def save_index(self):
@@ -103,9 +147,8 @@ class VectorStoreManager:
             os.makedirs(self.index_path)
         self.vector_store.save_local(self.index_path)
 
-    def add_documents(self, chunks: List[str]):
+    def add_documents(self, documents: List[Document]):
         """Add new documents to the vector store."""
-        documents = [Document(page_content=chunk) for chunk in chunks]
         if self.vector_store is None:
             self.vector_store = FAISS.from_documents(documents, self.embeddings)
         else:
@@ -127,9 +170,7 @@ class GroqClient:
         response = self.client.chat.completions.create(
             messages=[{
                 "role": "user",
-                "content": f"""Your are chatbot capable of summarizing given text. 
-                You can atmost 150 words to summarize a text and not more than that
-                here is the text {text}"""
+                "content": f"Summarize this text in less than 150 words: {text}"
             }],
             model="llama-3.1-8b-instant",
         )
@@ -150,12 +191,23 @@ class GroqClient:
                 Current context: {context}
                 Conversation history: {history_context}
 
+                if - user question has greeting(hi,How are you,hello) respond with appropriate greeting and keep the answer short(one line)
+                else - Repons with "Sorry i cant answer this question" for any other generic question which is not related to given context and keep the answer short(one line).
+                  
+
                 Guidelines:
                 1. Use the context intelligently and integrate relevant information
                 2. Provide answers based on reasoning
                 3. Be concise and relevant
-                4. Engage naturally with a friendly and professional tone
-                """
+                4. Engage naturally with a friendly and professional tone'
+                5 Please respond with a well-structured with proper format but no markdown formatting
+                   *Use bullet points for lists or key points.
+                   *Add line breaks between paragraphs to improve readability.
+                   *Use headings or bold text to emphasize important sections or concepts when necessary.
+                6.Dont use phrase like "this was the context and history context given by user"
+                7.Do not include any information about the context, just respond directly to the question based on the provided context.
+         
+            """
             }],
             model="llama-3.3-70b-versatile",
         )
@@ -170,111 +222,82 @@ class PDFContent:
 
 class PDFChatbot:
     def __init__(self, groq_api_key: str, index_path: str = 'faiss_index'):
-        self.vector_store_manager = VectorStoreManager(index_path)
+        TEXT_INDEX_PATH =  index_path+"_text"
+        TABLE_INDEX_PATH = index_path + "_table"
+        self.text_vector_store = VectorStoreManager(TEXT_INDEX_PATH)
+        self.table_vector_store = VectorStoreManager(TABLE_INDEX_PATH)
         self.groq_client = GroqClient(groq_api_key)
         self.chat_history: List[ChatHistory] = []
-        self.pdf_documents: Dict[str, PDFContent] = {}  # Store multiple PDF contents
+        self.pdf_documents: Dict[str, PDFContent] = {}
         self.current_pdf_id: Optional[str] = None
-        self.basic_responses = {
-            "hi": "Hello! How can I help you today?",
-            "hello": "Hi there! What can I do for you?",
-            "hey": "Hey! How can I assist you?",
-            "how are you": "I'm doing well, thank you for asking! How can I help you?",
-            "bye": "Goodbye! Have a great day!",
-            "goodbye": "Farewell! Feel free to return if you have more questions."
-        }
 
     def process_pdf(self, pdf_source: str) -> str:
-        """
-        Process PDF from either local path or URL and return summary.
-        
-        Args:
-            pdf_source: Local file path or HTTP URL to a PDF file
-        
-        Returns:
-            str: Summary of the PDF content
-        """
         try:
             processor = PDFProcessor(pdf_source)
             text = processor.extract_text()
-            chunks = processor.create_chunks(text)
-            self.vector_store_manager.add_documents(chunks)
+            tables = processor.extract_tables()
+            table_documents = processor.process_table(tables)
+
+            text_chunks = processor.create_chunks(text)
+            text_documents = [Document(page_content=chunk) for chunk in text_chunks]
+
+            # Index text and tables separately
+            self.text_vector_store.add_documents(text_documents)
+            self.table_vector_store.add_documents(table_documents)
+
+            # Generate summary using Groq
             summary = self.groq_client.summarize_text(text)
-            
-            # Generate unique ID for this PDF
             pdf_id = str(len(self.pdf_documents) + 1)
-            file_name = os.path.basename(pdf_source) if not processor.is_url else "uploaded_pdf.pdf"
-            upload_time = datetime.now().isoformat()
-            
-            # Store PDF content
+
             self.pdf_documents[pdf_id] = PDFContent(
                 text=text,
                 summary=summary,
-                file_name=file_name,
-                upload_time=upload_time
+                file_name=os.path.basename(pdf_source),
+                upload_time=datetime.now().isoformat()
             )
-            self.current_pdf_id = pdf_id
-            
-            # Add to chat history
-            self.chat_history.append(ChatHistory(
-                question=f"[PDF_UPLOAD_{pdf_id}] {file_name}",
-                answer=f"PDF Summary: {summary}\n\nFull Content Available for Reference"
-            ))
-            
+            self.current_pdf_id = pdf_id  # Set current PDF ID
             return summary
         except Exception as e:
-            error_msg = f"Error processing PDF: {str(e)}"
-            self.chat_history.append(ChatHistory(
-                question="[PDF_UPLOAD_ERROR]",
-                answer=error_msg
-            ))
-            raise ValueError(error_msg)
+            raise ValueError(f"Error processing PDF: {str(e)}")
 
-    def ask_question(self, question: str) -> str:
-        """Ask a question about the processed documents or handle basic conversation."""
-        # Convert question to lowercase for matching basic responses
-        question_lower = question.lower().strip()
+    def ask_question(self, question: str, k: int = 5) -> str:
+        """
+        Ask a question by fetching similar documents from both text and table indices.
+
+        Args:
+            question: User's question.
+            k: Number of top results to consider for similarity search.
+
+        Returns:
+            str: Answer to the question.
+        """
+        text_docs = []
+        table_docs = []
+
+        # Fetch top-k similar documents from both text and table indices
+        if self.text_vector_store.vector_store:
+            text_docs = self.text_vector_store.similarity_search(question, k=k)
+
+        if self.table_vector_store.vector_store:
+            table_docs = self.table_vector_store.similarity_search(question, k=k)
+
+        # Combine the content of both sets of documents
+        combined_context = " ".join([doc.page_content for doc in text_docs + table_docs])
+
+        if not combined_context:
+            answer = self.groq_client.answer_question(question, "", "")
         
-        # Check if it's a basic conversation pattern
-        if question_lower in self.basic_responses:
-            answer = self.basic_responses[question_lower]
-            self.chat_history.append(ChatHistory(question=question, answer=answer))
-            return answer
 
-        # If no PDF is processed yet and it's not a basic conversation,
-        # proceed with vector store check
-        if self.vector_store_manager.vector_store is None:
-            raise ValueError("No documents available. Please process a PDF first.")
+        # Combine history context
+        history_context = " ".join([f"Q: {h.question}\nA: {h.answer}" for h in self.chat_history])
 
-        try:
-            # Get relevant documents
-            docs = self.vector_store_manager.similarity_search(question)
-            context = " ".join([doc.page_content for doc in docs])
-            
-            # Get history context - exclude PDF content entries for clarity
-            history_context = " ".join([
-                f"Q: {h.question}\nA: {h.answer}" 
-                for h in self.chat_history 
-                if not h.question.startswith("[PDF_UPLOAD")
-            ])
-
-            # Generate answer
-            answer = self.groq_client.answer_question(question, context, history_context)
-            
-            # Update chat history
-            self.chat_history.append(ChatHistory(question=question, answer=answer))
-            
-            return answer
-        except Exception as e:
-            error_msg = f"Error generating answer: {str(e)}"
-            self.chat_history.append(ChatHistory(
-                question=question,
-                answer=f"Error: {error_msg}"
-            ))
-            raise ValueError(error_msg)
+        # Generate answer using Groq API
+        answer = self.groq_client.answer_question(question, combined_context, history_context)
+        self.chat_history.append(ChatHistory(question=question, answer=answer))
+        return answer
 
     def get_pdf_content(self, pdf_id: Optional[str] = None) -> Optional[PDFContent]:
-        """Get content of a specific PDF or current PDF."""
+        """Get content of a specific PDF or the current PDF."""
         if pdf_id is None:
             pdf_id = self.current_pdf_id
         return self.pdf_documents.get(pdf_id)
@@ -284,18 +307,20 @@ class PDFChatbot:
         Clear chat history and optionally PDF contents.
         
         Args:
-            include_pdfs: If True, also clear stored PDF contents
+            include_pdfs: If True, also clear stored PDF contents.
         """
         self.chat_history = []
         if include_pdfs:
             self.pdf_documents = {}
             self.current_pdf_id = None
 
+
 def main():
     # Initialize chatbot with your Groq API key
     chatbot = PDFChatbot(
-        groq_api_key="your_groq_api_key",
-        index_path="faiss_index"
+        groq_api_key="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",
+        index_path='faiss_index'
+       
     )
 
     # Example usage
@@ -307,16 +332,17 @@ def main():
 
         # Process a PDF
         print("\nProcessing PDF:")
-        summary = chatbot.process_pdf("example.pdf")
-        print(f"PDF Summary:\n{summary}\n")
+        # summary = chatbot.process_pdf("https://arxiv.org/pdf/1706.03762")
+        # print(f"PDF Summary:\n{summary}\n")
 
-        # Ask questions about the PDF
-        print("Asking questions about the PDF:")
+
+        # Ask questions about the combined content
+        print("Asking questions about the combined content:")
         questions = [
-            "What is the main topic of the document?",
-            "Can you summarize the key points?",
+            "how many sentence does WMT 2014 English-German dataset has?",
+            "what is the complexity per layer for layer type:Self-Attention ",
+            "what is the training for the parser Vinyals & Kaiser el al. (2014)"
         ]
-        
         for question in questions:
             answer = chatbot.ask_question(question)
             print(f"Q: {question}")
@@ -324,6 +350,7 @@ def main():
 
     except Exception as e:
         print(f"Error: {str(e)}")
+
 
 if __name__ == "__main__":
     main()

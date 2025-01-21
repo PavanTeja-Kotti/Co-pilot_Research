@@ -50,7 +50,7 @@ const AppLayout = () => {
         borderBottom: `1px solid ${token.colorBorder}`,
         position: 'sticky',
         top: 0,
-        zIndex: 1,
+        zIndex: 999,
         width: '100%',
         display: 'flex',
         alignItems: 'center',
@@ -90,7 +90,9 @@ const AppLayout = () => {
         padding: '16px',
         width: '300px',
         maxHeight: '400px',
-        overflow: 'auto'
+        overflow: 'auto',
+        background: token.colorBgElevated,
+        borderRadius: token.borderRadiusLG
     };
 
     const markAsRead = async (id) => {
@@ -146,6 +148,7 @@ const AppLayout = () => {
             </div>
             <List
                 loading={loading}
+               
                 dataSource={notifications}
                 renderItem={item => (
                     <List.Item
@@ -247,9 +250,9 @@ const AppLayout = () => {
                             label: <Link to="/summarization">summarization</Link>
                         },
                         {
-                            key: '/bulkchat',
+                            key: '/AIassistant',
                             icon: <AppstoreOutlined />,
-                            label: <Link to="/bulkchat">bulkchat</Link>
+                            label: <Link to="/AIassistant">AI Assistant</Link>
                         }
                     ]}
                 />

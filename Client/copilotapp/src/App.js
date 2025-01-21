@@ -12,6 +12,7 @@ import {InterestPage} from './pages/InterestPage';
 import {chatapi} from './utils/socket';
 import Sumarization from './pages/Sumarization';
 import Dashboard1 from './pages/Dashboard1';
+import AiAssistant from './pages/AiAssistant';
 
 const PublicRoute = ({ children }) => {
   const { user } = useAuth();
@@ -66,6 +67,7 @@ const App = () => {
           <Route path="/dashboard" element={<Dashboard1/>} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/summarization" element={<Sumarization />} />
+          <Route path="/AIassistant" element={<AiAssistant />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -129,6 +129,7 @@ class WebSocketService {
     isAuthError(event) {
         try {
             const data = JSON.parse(event.data);
+            
             return data.code === 4001 || // Invalid token
                    data.code === 4002 || // Token expired 
                    data.code === 4003;   // Authentication required

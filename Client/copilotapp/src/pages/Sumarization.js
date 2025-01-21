@@ -18,7 +18,8 @@ import {
   SearchOutlined, 
   ReloadOutlined, 
   BookOutlined, 
-  BookFilled 
+  BookFilled ,
+  CheckOutlined, MinusOutlined
 } from "@ant-design/icons";
 import debounce from 'lodash/debounce';
 import PdfViewer from "../components/common/PdfViewer";
@@ -80,7 +81,7 @@ const ResearchPapers = () => {
         PAGE_SIZE,
         {
           search: filters.search,
-          category: filters.category,
+          categories: filters.category,
           source: filters.source
         }
       );
@@ -174,6 +175,26 @@ const ResearchPapers = () => {
     }
   };
 
+  const handleToggleRead = async (paperId, e) => {
+    e.stopPropagation();
+    try {
+      const response = await api.scraping().toggleRead(paperId);
+     
+      if (response.success) {
+        setPapers(prev => prev.map(paper => 
+          paper.id === paperId 
+            ? { ...paper, is_paper_read: !paper.is_paper_read }
+            : paper
+        ));
+        message.success(response.message || 'Bookmark updated successfully');
+      } else {
+        message.error(response.error || 'Failed to update bookmark');
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      message.error('Failed to update bookmark');
+    }
+  };
   // Initial load
   useEffect(() => {
     const loadInitialData = async () => {
@@ -276,13 +297,22 @@ const ResearchPapers = () => {
           >
             {paper.title}
           </Title>
-          <Tooltip title={paper.is_bookmarked ? "Remove bookmark" : "Add bookmark"}>
-            <Button
-              type="text"
-              icon={paper.is_bookmarked ? <BookFilled /> : <BookOutlined />}
-              onClick={(e) => handleToggleBookmark(paper.id, e)}
-            />
-          </Tooltip>
+          <Space>
+            <Tooltip title={!paper.is_paper_read ? "Mark as read" : "Mark as unread"}>
+              <Button
+                type="text"
+                onClick={(e) => handleToggleRead(paper.id, e)}
+                icon={!paper.is_paper_read ? <CheckOutlined className="h-5 w-5" /> : <MinusOutlined className="h-5 w-5" />}
+              />
+            </Tooltip>
+            <Tooltip title={paper.is_bookmarked ? "Remove bookmark" : "Add bookmark"}>
+              <Button
+                type="text"
+                onClick={(e) => handleToggleBookmark(paper.id, e)}
+                icon={paper.is_bookmarked ? <BookFilled className="h-5 w-5" /> : <BookOutlined className="h-5 w-5" />}
+              />
+            </Tooltip>
+          </Space>
         </Space>
 
         <Paragraph 

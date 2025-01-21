@@ -16,6 +16,7 @@ class MessageType(models.TextChoices):
     IMAGE = 'IMAGE', 'Image Message'
     VIDEO = 'VIDEO', 'Video Message'
     AUDIO = 'AUDIO', 'Audio Message'
+    MULTIPLE = 'MULTIPLE', 'Multiple Messages'
     DOCUMENT = 'DOCUMENT', 'Document'
     LOCATION = 'LOCATION', 'Location'
     CONTACT = 'CONTACT', 'Contact'
