@@ -550,8 +550,9 @@ const ChatView = ({
               color: "#fff",
               borderRadius: "20px",
               resize: "none",
-              padding: "10px 12px",
+              padding: "3px 12px",
               fontSize: "14px",
+              transition: "border-color 0.3s ease",
             }}
           />
           <Button

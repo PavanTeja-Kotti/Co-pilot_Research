@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
@@ -9,6 +10,7 @@ from django.db.models import Prefetch
 from django.db.models import Q
 from typing import Dict, List, Optional, Any
 import uuid
+from django.conf import settings
 from .models import (
     
     Chat, 
@@ -163,21 +165,29 @@ class GroupChatConsumer(BaseChatConsumer):
             logger.error(f"Error in group chat connect: {str(e)}", exc_info=True)
             await self.close()
 
+
     async def get_or_create_chatbot(self, group_id):
-        """Get existing chatbot instance or create new one"""
+        """Get existing chatbot instance or create a new one."""
         chatbot = self._cache_manager.get(group_id)
         groq_api_key = os.getenv('GROQ_API_KEY') or "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"  # Make sure to set this in your environment
+        
         if not chatbot:
-            chatbot = pdfchatBot.PDFChatbot(
+            # Offload blocking PDFChatbot initialization to a thread
+            chatbot = await asyncio.to_thread(
+                pdfchatBot.PDFChatbot,
                 groq_api_key=groq_api_key,
                 index_path=f"faiss_index_group_{group_id}"
             )
             self._cache_manager.set(group_id, chatbot)
-            # chatbot.vector_store_manager.load_vectors()
-            # Load chat history from existing messages
-            await self.load_chat_history(group_id)
             
+            # Load chat history (if any)
+            try:
+                await self.load_chat_history(group_id)
+            except Exception as e:
+                logger.error(f"Error loading chat history for group {group_id}: {e}", exc_info=True)
+        
         return chatbot
+
 
     @database_sync_to_async
     def load_chat_history(self, group_id):
@@ -257,6 +267,8 @@ class GroupChatConsumer(BaseChatConsumer):
             mention = data.get('mention', [])
             if mention and any(d.get('name', '').lower() == 'bot' for d in mention):
                 asyncio.create_task(self.handle_ai_response(data, message_data, self.group_id))
+                
+    
                 
             
                 
@@ -621,9 +633,9 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
                     
             elif command == 'delete_group':
                 group_data = await self.delete_group(data.get('group_id'))
-                
                 if group_data:
                     # Notify all members about group deletion
+                    asyncio.create_task(self.delete_group_files(data.get('group_id')))
                     for member in group_data['members']:
                         await self.channel_layer.group_send(
                             f'user_{member["user"]["id"]}_management',
@@ -635,6 +647,7 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         )
+
                 else:
                     await self.send_error('Failed to delete group')
                     
@@ -709,6 +722,24 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error handling management command: {str(e)}", exc_info=True)
             await self.send_error('Internal server error')
+
+    async def delete_group_files(self, group_id):
+        """Delete all files associated with a group"""
+        try:
+            
+
+            index_path=os.path.join(settings.BASE_DIR, f'FissIndex/faiss_index_group_{group_id}_text')
+            if os.path.exists(index_path):
+                shutil.rmtree(index_path)
+            index_path=os.path.join(settings.BASE_DIR, f'FissIndex/faiss_index_group_{group_id}_table')
+            if os.path.exists(index_path):
+                shutil.rmtree(index_path)
+            
+        except GroupChat.DoesNotExist:
+            logger.error(f"Group not found for file deletion: {group_id}")
+        except Exception as e:
+            logger.error(f"Error deleting group files: {str(e)}")
+
 
     async def chat_notification(self, event):
         """Handle chat notifications and send them to the connected client"""
