@@ -41,91 +41,6 @@ const { Title, Text, Paragraph } = Typography;
 const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2'];
 
 
-const RenderActiveShape = React.memo(({ cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value }) => (
-  <g>
-    <text x={cx} y={cy - 20} textAnchor="middle" fill="#000">
-      {payload.name}
-    </text>
-    <text x={cx} y={cy + 20} textAnchor="middle" fill="#666">
-      {`${value} items (${(percent * 100).toFixed(1)}%)`}
-    </text>
-    <Sector
-      cx={cx}
-      cy={cy}
-      innerRadius={innerRadius}
-      outerRadius={outerRadius}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      fill={fill}
-    />
-    <Sector
-      cx={cx}
-      cy={cy}
-      startAngle={startAngle}
-      endAngle={endAngle}
-      innerRadius={outerRadius + 6}
-      outerRadius={outerRadius + 10}
-      fill={fill}
-    />
-  </g>
-));
-
-// Memoized UI Components
-const SkeletonUI = React.memo(() => (
-  <Space direction="vertical" size="large" style={{ width: '100%' }}>
-    <Row gutter={[16, 16]}>
-      <Col span={12}>
-        <Card>
-          <Skeleton.Avatar size={200} active shape="circle" />
-          <Skeleton active />
-        </Card>
-      </Col>
-      <Col span={12}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Card>
-            <Skeleton.Button active block size="large" />
-            <Skeleton active paragraph={{ rows: 1 }} />
-          </Card>
-          <Card>
-            <Skeleton.Input active size="large" block />
-            <Skeleton active paragraph={{ rows: 4 }} />
-          </Card>
-        </Space>
-      </Col>
-    </Row>
-  </Space>
-));
-
-const InitialState = React.memo(() => (
-  <Card style={{ textAlign: 'center', padding: '40px' }}>
-    <Space direction="vertical" size="large">
-      <FileTextOutlined style={{ fontSize: '48px', color: '#bfbfbf' }} />
-      <Text type="secondary">
-        Enter a search term to begin exploring the research papers
-      </Text>
-    </Space>
-  </Card>
-));
-
-const NoDataUI = React.memo(({ searchQuery, onReset }) => (
-  <Card style={{ textAlign: 'center', padding: '40px' }}>
-    <Space direction="vertical" size="large">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={
-          <Text type="secondary">
-            {searchQuery 
-              ? `No results found for "${searchQuery}"`
-              : 'No data available'}
-          </Text>
-        }
-      />
-      <Button type="primary" onClick={onReset} icon={<ReloadOutlined />}>
-        Reset Search
-      </Button>
-    </Space>
-  </Card>
-));
 
 const ResearchDashboard = () => {
   // Constants
@@ -155,7 +70,7 @@ const ResearchDashboard = () => {
   const [detailData, setDetailData] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(null);
-  const [analysisMode, setAnalysisMode] = useState('authors');
+  const [analysisMode, setAnalysisMode] = useState('categories');
   const [selectedTimeRange, setSelectedTimeRange] = useState('all');
   const [selectedFilters, setSelectedFilters] = useState({});
   const [filteredData, setFilteredData] = useState([]);
@@ -409,113 +324,7 @@ const ResearchDashboard = () => {
     { value: 'last_3_months', label: 'Last 3 Months' }
   ], []);
 
-  const renderLabel = (props) => {
-    const { 
-      cx, 
-      cy, 
-      midAngle, 
-      innerRadius, 
-      outerRadius, 
-      value, 
-      name, 
-      startAngle, 
-      endAngle 
-    } = props;
-    
-    const RADIAN = Math.PI / 180;
-    const arcLength = Math.abs(endAngle - startAngle);
-    
-    // Calculate the middle radius for text placement
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    
-    // Calculate position
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    
-    // Calculate available width based on arc length and radius
-    const availableWidth = 2 * Math.PI * radius * (arcLength / 360);
-    
-    // Dynamic font sizing based on segment size and text length
-    let fontSize = 14; // Default size
-    if (arcLength < 6) {
-      return null; // Don't render text for very small segments
-    } 
-    else if (arcLength < 15) {
-      fontSize=6;
-      
-    } else if (arcLength < 30) {
-      fontSize = 8;
-    } else if (arcLength < 45) {
-      fontSize = 10;
-    } else if (name.length > 20) {
-      // Reduce font size for long text
-      fontSize = Math.min(14, Math.floor(availableWidth / name.length) * 1.5);
-    }
-    
-    // For very large segments (like main categories)
-    if (arcLength > 60) {
-      fontSize = Math.min(18, fontSize); // Cap maximum size
-    }
-    
-    // Split long text into multiple lines if segment is large enough
-    const words = name.split(' ');
-    const shouldWrap = arcLength > 45 && words.length > 1;
-    
-    if (shouldWrap) {
-      // Calculate middle word index
-      const middleIndex = Math.floor(words.length / 2);
-      const firstLine = words.slice(0, middleIndex).join(' ');
-      const secondLine = words.slice(middleIndex).join(' ');
-      
-      return (
-        <g>
-          <text 
-            x={x} 
-            y={y - fontSize/2}
-            fill="white" 
-            textAnchor="middle" 
-            dominantBaseline="central"
-            style={{
-              fontSize: `${fontSize}px`,
-              fontWeight: 500
-            }}
-          >
-            {firstLine}
-          </text>
-          <text 
-            x={x} 
-            y={y + fontSize/2}
-            fill="white" 
-            textAnchor="middle" 
-            dominantBaseline="central"
-            style={{
-              fontSize: `${fontSize}px`,
-              fontWeight: 500
-            }}
-          >
-            {secondLine}
-          </text>
-        </g>
-      );
-    }
-    
-    // Single line text
-    return (
-      <text 
-        x={x} 
-        y={y}
-        fill="white" 
-        textAnchor="middle" 
-        dominantBaseline="central"
-        style={{
-          fontSize: `${fontSize}px`,
-          fontWeight: 500
-        }}
-      >
-        {name}
-      </text>
-    );
-  };
+
 
   return (
     <div className="research-dashboard">
@@ -752,6 +561,203 @@ const ResearchDashboard = () => {
 };
 
 export default React.memo(ResearchDashboard);
+
+
+
+
+const RenderActiveShape = React.memo(({ cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value }) => (
+  <g>
+    <text x={cx} y={cy - 20} textAnchor="middle" fill="#000">
+      {payload.name}
+    </text>
+    <text x={cx} y={cy + 20} textAnchor="middle" fill="#666">
+      {`${value} items (${(percent * 100).toFixed(1)}%)`}
+    </text>
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+    />
+    <Sector
+      cx={cx}
+      cy={cy}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      innerRadius={outerRadius + 6}
+      outerRadius={outerRadius + 10}
+      fill={fill}
+    />
+  </g>
+));
+
+// Memoized UI Components
+const SkeletonUI = React.memo(() => (
+  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Row gutter={[16, 16]}>
+      <Col span={12}>
+        <Card>
+          <Skeleton.Avatar size={200} active shape="circle" />
+          <Skeleton active />
+        </Card>
+      </Col>
+      <Col span={12}>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Card>
+            <Skeleton.Button active block size="large" />
+            <Skeleton active paragraph={{ rows: 1 }} />
+          </Card>
+          <Card>
+            <Skeleton.Input active size="large" block />
+            <Skeleton active paragraph={{ rows: 4 }} />
+          </Card>
+        </Space>
+      </Col>
+    </Row>
+  </Space>
+));
+
+const InitialState = React.memo(() => (
+  <Card style={{ textAlign: 'center', padding: '40px' }}>
+    <Space direction="vertical" size="large">
+      <FileTextOutlined style={{ fontSize: '48px', color: '#bfbfbf' }} />
+      <Text type="secondary">
+        Enter a search term to begin exploring the research papers
+      </Text>
+    </Space>
+  </Card>
+));
+
+const NoDataUI = React.memo(({ searchQuery, onReset }) => (
+  <Card style={{ textAlign: 'center', padding: '40px' }}>
+    <Space direction="vertical" size="large">
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          <Text type="secondary">
+            {searchQuery 
+              ? `No results found for "${searchQuery}"`
+              : 'No data available'}
+          </Text>
+        }
+      />
+      <Button type="primary" onClick={onReset} icon={<ReloadOutlined />}>
+        Reset Search
+      </Button>
+    </Space>
+  </Card>
+));
+
+const renderLabel = (props) => {
+  const { 
+    cx, 
+    cy, 
+    midAngle, 
+    innerRadius, 
+    outerRadius, 
+    value, 
+    name, 
+    startAngle, 
+    endAngle 
+  } = props;
+  
+  const RADIAN = Math.PI / 180;
+  const arcLength = Math.abs(endAngle - startAngle);
+  
+  // Calculate the middle radius for text placement
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  
+  // Calculate position
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  
+  // Calculate available width based on arc length and radius
+  const availableWidth = 2 * Math.PI * radius * (arcLength / 360);
+  
+  // Dynamic font sizing based on segment size and text length
+  let fontSize = 14; // Default size
+  if (arcLength < 6) {
+    return null; // Don't render text for very small segments
+  } 
+  else if (arcLength < 15) {
+    fontSize=6;
+    
+  } else if (arcLength < 30) {
+    fontSize = 8;
+  } else if (arcLength < 45) {
+    fontSize = 10;
+  } else if (name.length > 20) {
+    // Reduce font size for long text
+    fontSize = Math.min(14, Math.floor(availableWidth / name.length) * 1.5);
+  }
+  
+  // For very large segments (like main categories)
+  if (arcLength > 60) {
+    fontSize = Math.min(18, fontSize); // Cap maximum size
+  }
+  
+  // Split long text into multiple lines if segment is large enough
+  const words = name.split(' ');
+  const shouldWrap = arcLength > 45 && words.length > 1;
+  
+  if (shouldWrap) {
+    // Calculate middle word index
+    const middleIndex = Math.floor(words.length / 2);
+    const firstLine = words.slice(0, middleIndex).join(' ');
+    const secondLine = words.slice(middleIndex).join(' ');
+    
+    return (
+      <g>
+        <text 
+          x={x} 
+          y={y - fontSize/2}
+          fill="white" 
+          textAnchor="middle" 
+          dominantBaseline="central"
+          style={{
+            fontSize: `${fontSize}px`,
+            fontWeight: 500
+          }}
+        >
+          {firstLine}
+        </text>
+        <text 
+          x={x} 
+          y={y + fontSize/2}
+          fill="white" 
+          textAnchor="middle" 
+          dominantBaseline="central"
+          style={{
+            fontSize: `${fontSize}px`,
+            fontWeight: 500
+          }}
+        >
+          {secondLine}
+        </text>
+      </g>
+    );
+  }
+  
+  // Single line text
+  return (
+    <text 
+      x={x} 
+      y={y}
+      fill="white" 
+      textAnchor="middle" 
+      dominantBaseline="central"
+      style={{
+        fontSize: `${fontSize}px`,
+        fontWeight: 500
+      }}
+    >
+      {name}
+    </text>
+  );
+};
 
 const ItemCard = React.memo (({ 
   item, 

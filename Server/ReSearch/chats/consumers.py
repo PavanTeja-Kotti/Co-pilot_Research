@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
@@ -621,9 +622,9 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
                     
             elif command == 'delete_group':
                 group_data = await self.delete_group(data.get('group_id'))
-                
                 if group_data:
                     # Notify all members about group deletion
+                    asyncio.create_task(self.delete_group_files(data.get('group_id')))
                     for member in group_data['members']:
                         await self.channel_layer.group_send(
                             f'user_{member["user"]["id"]}_management',
@@ -635,6 +636,7 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
                                 }
                             }
                         )
+
                 else:
                     await self.send_error('Failed to delete group')
                     
@@ -709,6 +711,22 @@ class ChatManagementConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error handling management command: {str(e)}", exc_info=True)
             await self.send_error('Internal server error')
+
+    async def delete_group_files(self, group_id):
+        """Delete all files associated with a group"""
+        try:
+            index_path=f"faiss_index_group_{group_id}_text"
+            if os.path.exists(index_path):
+                shutil.rmtree(index_path)
+            index_path=f"faiss_index_group_{group_id}_table"
+            if os.path.exists(index_path):
+                shutil.rmtree(index_path)
+            
+        except GroupChat.DoesNotExist:
+            logger.error(f"Group not found for file deletion: {group_id}")
+        except Exception as e:
+            logger.error(f"Error deleting group files: {str(e)}")
+
 
     async def chat_notification(self, event):
         """Handle chat notifications and send them to the connected client"""
