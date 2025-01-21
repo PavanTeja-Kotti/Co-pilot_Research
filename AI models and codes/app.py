@@ -8,7 +8,6 @@ from groq import Groq
 
 FAISS_INDEX_PATH = 'faiss_index'
 
-# PDF Upload & Extraction
 def extract_pdf_text(pdf_file):
     reader = PyPDF2.PdfReader(pdf_file)
     text = ""
@@ -25,7 +24,7 @@ def summarize_text(text):
         messages=[
             {
                 "role": "user",
-                "content": f"""Your are chatbot capable of summarizing given text. You can atmost 200 words to summarize a text and not more than that
+                "content": f"""Your are chatbot capable of summarizing given text. You can atmost 150 words to summarize a text and not more than that
                   here is the text {text}
                    """
             }
@@ -33,9 +32,11 @@ def summarize_text(text):
         model="llama-3.1-8b-instant",
     )
 
+    
+
     return chat_completion.choices[0].message.content
 
-def answer_question(question, history_context,context):
+def answer_question(question, history_context, context):
 
     client = Groq(
         api_key="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"
@@ -70,8 +71,6 @@ def save_faiss_index(vector_store, path):
     if not os.path.exists(path):
         os.makedirs(path)
     vector_store.save_local(path)
-
-
 
 def load_faiss_index(path, embeddings):
     if os.path.exists(path):

@@ -63,7 +63,7 @@ def apply_filters(queryset, request):
 # Existing Research Paper views
 class ResearchPaperPagination(LimitOffsetPagination):
     default_limit = 10
-    max_limit = 50
+    max_limit = 5000
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])

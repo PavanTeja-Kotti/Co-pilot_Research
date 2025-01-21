@@ -6,7 +6,7 @@ from langchain.text_splitter import CharacterTextSplitter
 
 document_loder = PyPDFLoader("test.pdf")
 documents = document_loder.load()
-print(documents)
+print("documents: ", documents)
 
 text_splitter = CharacterTextSplitter(
     separator="\n\n",
