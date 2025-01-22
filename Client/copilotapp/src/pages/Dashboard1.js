@@ -766,7 +766,7 @@ const renderLabel = (props) => {
         fontWeight: 500
       }}
     >
-      {name}
+      {name=='Natural Language Processing'? 'NLP':name}
     </text>
   );
 };
