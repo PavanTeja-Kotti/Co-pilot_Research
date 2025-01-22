@@ -9,19 +9,9 @@ import requests
 import pdfplumber
 import PyPDF2
 from groq import Groq
-from django.conf import settings
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
-
-
-def create_FissIndex_directory():
-        """Create upload directory if it doesn't exist"""
-        FissIndex = os.path.join(settings.BASE_DIR, 'FissIndex')
-        if not os.path.exists(FissIndex):
-            os.makedirs(FissIndex)
-        return FissIndex
-
 
 @dataclass
 class ChatHistory:
@@ -124,11 +114,18 @@ class PDFProcessor:
             List[Document]: List of processed table documents.
         """
         table_documents = []
+        if not tables:  # Check if tables are empty
+            return table_documents
+
         for table in tables:
+            if not table or not isinstance(table, list):  # Validate table structure
+                continue
             for row in table:
                 row_content = " | ".join([str(cell) for cell in row])  # Convert row to a string
                 table_documents.append(Document(page_content=f"Table Row: {row_content}"))
+
         return table_documents
+
 
     def create_chunks(self, text: str, chunk_size: int = 500) -> List[str]:
         """Split text into chunks of specified size."""
@@ -143,12 +140,9 @@ class VectorStoreManager:
         self.vector_store = self._load_index()
 
     def _load_index(self) -> Optional[FAISS]:
-        """Load existing FAISS index if it exists, with validation."""
+        """Load existing FAISS index if it exists."""
         if os.path.exists(self.index_path):
-            try:
-                return FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
-            except Exception as e:
-                raise ValueError(f"Failed to load FAISS index securely: {e}")
+            return FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
         return None
 
     def save_index(self):
@@ -176,13 +170,16 @@ class GroqClient:
         self.client = Groq(api_key=api_key)
 
     def summarize_text(self, text: str) -> str:
+      
+
+
         """Summarize text using Groq API."""
         response = self.client.chat.completions.create(
             messages=[{
                 "role": "user",
                 "content": f"Summarize this text in less than 150 words: {text}"
             }],
-            model="llama-3.1-8b-instant",
+            model="llama3-8b-8192"
         )
         return response.choices[0].message.content
 
@@ -232,8 +229,8 @@ class PDFContent:
 
 class PDFChatbot:
     def __init__(self, groq_api_key: str, index_path: str = 'faiss_index'):
-        TEXT_INDEX_PATH = os.path.join(create_FissIndex_directory(), index_path + "_text")
-        TABLE_INDEX_PATH = os.path.join(create_FissIndex_directory(),index_path + "_table")
+        TEXT_INDEX_PATH =  index_path+"text"
+        TABLE_INDEX_PATH = index_path + "table"
         self.text_vector_store = VectorStoreManager(TEXT_INDEX_PATH)
         self.table_vector_store = VectorStoreManager(TABLE_INDEX_PATH)
         self.groq_client = GroqClient(groq_api_key)
@@ -251,9 +248,12 @@ class PDFChatbot:
             text_chunks = processor.create_chunks(text)
             text_documents = [Document(page_content=chunk) for chunk in text_chunks]
 
-            # Index text and tables separately
+            # Index text documents
             self.text_vector_store.add_documents(text_documents)
-            self.table_vector_store.add_documents(table_documents)
+
+            # Only index tables if there are valid table documents
+            if table_documents:
+                self.table_vector_store.add_documents(table_documents)
 
             # Generate summary using Groq
             summary = self.groq_client.summarize_text(text)
@@ -269,6 +269,8 @@ class PDFChatbot:
             return summary
         except Exception as e:
             raise ValueError(f"Error processing PDF: {str(e)}")
+
+
 
     def ask_question(self, question: str, k: int = 5) -> str:
         """
@@ -342,8 +344,9 @@ def main():
 
         # Process a PDF
         print("\nProcessing PDF:")
-        # summary = chatbot.process_pdf("https://arxiv.org/pdf/1706.03762")
-        # print(f"PDF Summary:\n{summary}\n")
+        summary = chatbot.process_pdf("https://arxiv.org/pdf/2201.08430v2")
+        
+        print(f"PDF Summary:\n{summary}\n")
 
 
         # Ask questions about the combined content
@@ -364,3 +367,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
