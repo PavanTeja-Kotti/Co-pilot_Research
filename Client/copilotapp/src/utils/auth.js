@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect ,useReducer} from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotification } from "./NotificationContext";
 import createDebounce, { createAccumulatingDebounce } from "./debounce";
@@ -8,12 +8,130 @@ import api from "./api";
 
 const AuthContext = createContext(null);
 
+const initialState = {
+  mainData: {
+    yearData: [],
+    categoryData: [],
+    originalCategoryData: []
+  },
+  selectedTopic: null,
+  selectedYear: null,
+  detailData: [],
+  visibleDetailData: [],
+  activeIndex: 0,
+  selectedCategoryIndex: null,
+  analysisMode: 'categories',
+  selectedTimeRange: 'all',
+  selectedFilters: {},
+  filteredData: [],
+  isLoading: false,
+  searchQuery: '',
+  hasData: false,
+  error: null,
+  searchResults: [],
+  searchCache: null
+
+};
+
+const dashboardReducer = (state, action) => {
+  switch (action.type) {
+    case 'INITIALIZE_DATA':
+      return {
+        ...state,
+        searchResults: action.payload,
+        filteredData: action.payload,
+        searchCache: action.payload,
+        hasData: true
+      }
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload };
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+    case 'SET_SEARCH_RESULTS':
+      return {
+        ...state,
+        searchResults: action.payload,
+        hasData: action.payload.length > 0,
+        filteredData: action.payload,
+        searchQuery: action.meta?.query || state.searchQuery
+      };
+    case 'SET_FILTERED_DATA':
+      return { ...state, filteredData: action.payload };
+    case 'SET_MAIN_DATA':
+      return {
+        ...state,
+        mainData: {
+          ...state.mainData,
+          ...action.payload,
+          originalCategoryData: action.payload.categoryData
+        }
+      };
+    case 'SET_ANALYSIS_MODE':
+      return { ...state, analysisMode: action.payload };
+    case 'SET_TIME_RANGE':
+      return { ...state, selectedTimeRange: action.payload };
+    case 'SET_FILTER':
+      return {
+        ...state,
+        selectedFilters: {
+          ...state.selectedFilters,
+          [action.payload.field]: action.payload.values
+        }
+      };
+      case 'SELECT_CATEGORY':
+        return {
+          ...state,
+          selectedCategoryIndex: action.payload.index,
+          selectedTopic: action.payload.data?.payload?.name || null,
+          detailData: action.payload.data?.payload?.items || []
+        };
+        case 'SELECT_YEAR':
+          return {
+            ...state,
+            selectedYear: action.payload.data?.payload?.name || null,
+            selectedTopic: action.payload.data?.payload?.name ? `Year ${action.payload.data.payload.name}` : null,
+            detailData: action.payload.items || [],
+            mainData: {
+              ...state.mainData,
+              categoryData: action.payload.categoryData || state.mainData.categoryData
+            }
+          };
+    case 'ADD_VISIBLE_ITEMS':
+      return {
+        ...state,
+        visibleDetailData: [...state.visibleDetailData, ...action.payload]
+      };
+    case 'RESET_SELECTION':
+      return {
+        ...state,
+        selectedTopic: null,
+        selectedYear: null,
+        selectedCategoryIndex: null,
+        detailData: [],
+        visibleDetailData: [],
+        mainData: {
+          ...state.mainData,
+          categoryData: state.mainData.originalCategoryData
+        }
+      };
+    
+    case 'RESET':
+      return initialState;
+    default:
+      return state;
+  }
+};
+
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fileCache, setFileCache] = useState(new Map());
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
+  const [state, dispatch] = useReducer(dashboardReducer, initialState);
 
 
 
@@ -297,7 +415,8 @@ export const AuthProvider = ({ children }) => {
         downloadFile,
         uploadFile,
         getCachedFile,
-        clearFileCache
+        clearFileCache,
+        state, dispatch
       }}
     >
       {children}

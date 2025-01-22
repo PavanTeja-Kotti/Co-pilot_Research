@@ -321,7 +321,8 @@ class GroupChatConsumer(BaseChatConsumer):
 
     async def handle_ai_response(self, lastMessage, message_data, group_id):
         try:
-            print(message_data)
+            # print(message_data)
+            print("ajhasjh",  len(message_data['text_content'].lstrip('@bot').strip()))    
             chatbot = await self.get_or_create_chatbot(group_id)
             if not chatbot:
                 return
@@ -339,6 +340,7 @@ class GroupChatConsumer(BaseChatConsumer):
                                 lastMessage=summary)
                             if message:
                                 message_data = await self.get_message_data(message)
+                                print("calling one time")
                                 await self.channel_layer.group_send(
                                     self.chat_group,
                                     {
@@ -346,15 +348,16 @@ class GroupChatConsumer(BaseChatConsumer):
                                         'message': message_data
                                     }
                                 )
-                                
-            if message_data['text_content'].lstrip('@bot').strip():
-                # Process text message and get response
+
+            text_content = message_data['text_content'].lstrip('@bot').strip()         
+            if text_content and len(text_content)>0:
                 response = await asyncio.to_thread(chatbot.ask_question, message_data['text_content'].lstrip('@bot').strip())
                 if response:
                     message = await self.processAIResponse(
                         group_id=group_id,
                         content={},
                         lastMessage=response)
+                    
                     if message:
                         message_data = await self.get_message_data(message)
                         await self.channel_layer.group_send(

@@ -26,101 +26,137 @@ const BackgroundSVG = () => {
       preserveAspectRatio="xMidYMid slice" 
       style={svgStyle}
     >
+      <rect width="100%" height="100%" fill="#0a0a0a"/>
+      
+      <pattern id="tech-research-icons" x="0" y="0" width="250" height="250" patternUnits="userSpaceOnUse">
+        {/* AI & Machine Learning */}
+        <path 
+          d="M25 25 h20 v20 h-20 z m5 10 h10 m-12.5 -5 v10 m15 -10 v10" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Cloud Computing */}
+        <path 
+          d="M100 35 c-5 -5 5 -10 10 -5 c5 -10 20 -5 20 5 c10 -5 15 5 10 10 h-40 c-5 -5 0 -10 0 -10" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Database */}
+        <path 
+          d="M175 25 v20 h20 v-20 z m0 10 h20 m-20 -5 h20" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Scientific Flask */}
+        <path 
+          d="M25 100 l10 -20 v-10 h8 v10 l10 20 z" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Atom */}
+        <circle cx="100" cy="100" r="1.5" fill="#404040"/>
+        <ellipse 
+          cx="100" 
+          cy="100" 
+          rx="12" 
+          ry="4.8" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        <ellipse 
+          cx="100" 
+          cy="100" 
+          rx="12" 
+          ry="4.8" 
+          transform="rotate(60 100 100)"
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        <ellipse 
+          cx="100" 
+          cy="100" 
+          rx="12" 
+          ry="4.8" 
+          transform="rotate(120 100 100)"
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Graph */}
+        <path 
+          d="M175 100 l8 -8 l8 8 l8 -8 l8 8" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Laptop */}
+        <path 
+          d="M25 175 h30 l10 10 v20 h-40 z m5 15 h20 m-20 -7.5 h20" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Network */}
+        <circle 
+          cx="100" 
+          cy="175" 
+          r="8" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        <path 
+          d="M92 175 h-10 m26 0 h10" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        
+        {/* Chip */}
+        <path 
+          d="M175 175 l10 -10 h10 l10 10 l-10 10 h-10 z" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="2.5"
+        />
+        <path 
+          d="M180 175 h20 m-10 -10 v20" 
+          fill="none" 
+          stroke="#404040" 
+          strokeWidth="1.5"
+        />
+      </pattern>
+      
+      <rect width="100%" height="100%" fill="url(#tech-research-icons)"/>
+      
       <defs>
-        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0f172a">
-            <animate 
-              attributeName="stop-color" 
-              values="#0f172a;#1e293b;#0f172a" 
-              dur="8s" 
-              repeatCount="indefinite"
-            />
-          </stop>
-          <stop offset="100%" stopColor="#1e293b">
-            <animate 
-              attributeName="stop-color" 
-              values="#1e293b;#0f172a;#1e293b" 
-              dur="8s" 
-              repeatCount="indefinite"
-            />
-          </stop>
+        <radialGradient id="centerGlow" cx="50%" cy="50%" r="75%">
+          <stop offset="0%" stopColor="#1f1f1f" stopOpacity="0.6"/>
+          <stop offset="100%" stopColor="#0a0a0a" stopOpacity="0.9"/>
+        </radialGradient>
+        
+        <linearGradient id="techGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#1a1a1a" stopOpacity="0.8"/>
+          <stop offset="50%" stopColor="#0f0f0f" stopOpacity="0.7"/>
+          <stop offset="100%" stopColor="#1a1a1a" stopOpacity="0.8"/>
         </linearGradient>
-
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-
-        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-          <path 
-            d="M 40 0 L 0 0 0 40" 
-            fill="none" 
-            stroke="#334155" 
-            strokeWidth="0.5"
-            opacity="0.2"
-          />
-        </pattern>
       </defs>
-
-      <rect width="100%" height="100%" fill="url(#bgGradient)"/>
-      <rect width="100%" height="100%" fill="url(#grid)"/>
-
-      {/* Animated Lines */}
-      {[...Array(5)].map((_, i) => (
-        <path
-          key={i}
-          d={`M ${-200 + i * 500} 0 Q ${400 + i * 500} ${540 + Math.sin(i) * 200} ${2000 + i * 500} 1080`}
-          fill="none"
-          stroke="#60a5fa"
-          strokeWidth="1"
-          opacity="0.15"
-          filter="url(#glow)"
-        >
-          <animate
-            attributeName="d"
-            values={`
-              M ${-200 + i * 500} 0 Q ${400 + i * 500} ${540 + Math.sin(i) * 200} ${2000 + i * 500} 1080;
-              M ${-200 + i * 500} 0 Q ${400 + i * 500} ${540 - Math.sin(i) * 200} ${2000 + i * 500} 1080;
-              M ${-200 + i * 500} 0 Q ${400 + i * 500} ${540 + Math.sin(i) * 200} ${2000 + i * 500} 1080
-            `}
-            dur="20s"
-            repeatCount="indefinite"
-          />
-        </path>
-      ))}
-
-      {/* Floating dots */}
-      {[...Array(30)].map((_, i) => (
-        <g key={i} filter="url(#glow)">
-          <circle
-            r="1.5"
-            fill="#60a5fa"
-            opacity="0.4"
-          >
-            <animate
-              attributeName="cx"
-              values={`${Math.random() * 100}%;${Math.random() * 100}%`}
-              dur={`${15 + Math.random() * 15}s`}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="cy"
-              values={`${Math.random() * 100}%;${Math.random() * 100}%`}
-              dur={`${15 + Math.random() * 15}s`}
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="0.4;0.8;0.4"
-              dur={`${3 + Math.random() * 2}s`}
-              repeatCount="indefinite"
-            />
-          </circle>
-        </g>
-      ))}
+      
+      <rect width="100%" height="100%" fill="url(#centerGlow)" opacity="0.85"/>
+      <rect width="100%" height="100%" fill="url(#techGradient)" opacity="0.75"/>
     </svg>
   );
 };
@@ -138,32 +174,20 @@ const AuthCard = ({ children, title, subtitle }) => {
   };
 
   const cardStyle = {
-    background: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: '24px',
+    background: token.colorBgElevated,
+    borderRadius: token.borderRadiusLG,
     width: '100%',
     maxWidth: 450,
-    padding: '40px',
-    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
-    backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    position: 'relative',
-    overflow: 'hidden'
+    padding: token.paddingLG,
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+    backdropFilter: 'blur(8px)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)'
   };
 
   const titleStyle = {
     marginBottom: token.marginXS,
-    color: 'rgba(255, 255, 255, 0.95)',
-    fontSize: '32px',
-    fontWeight: 600,
-    textAlign: 'center',
-    letterSpacing: '-0.5px'
-  };
-
-  const subtitleStyle = {
-    textAlign: 'center',
-    marginBottom: token.marginLG * 1.5,
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: '16px'
+    color: token.colorTextHeading
   };
 
   return (
@@ -171,26 +195,14 @@ const AuthCard = ({ children, title, subtitle }) => {
       <BackgroundSVG />
       <div style={containerStyle}>
         <Card bordered={false} style={cardStyle}>
-          <div 
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '6px',
-              background: 'linear-gradient(90deg, #60a5fa, #3b82f6)',
-              opacity: 0.7
-            }} 
-          />
           <Title level={2} style={titleStyle}>{title}</Title>
-          <Text style={subtitleStyle}>{subtitle}</Text>
+          <Text type="secondary">{subtitle}</Text>
           {children}
         </Card>
       </div>
     </>
   );
 };
-
 
 const Login = () => {
   const { login } = useAuth();

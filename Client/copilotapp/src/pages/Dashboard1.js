@@ -1,55 +1,21 @@
-import React, { useState, useEffect ,useCallback, useMemo} from 'react';
-import { 
-  Card, 
-  Button, 
-  Typography, 
-  Row, 
-  Col, 
-  Space, 
-  Radio, 
-  Statistic,
-  Select,
-  Tag,
-  Input,
-  Skeleton,
-  Empty,
-  Alert,
-  Modal, 
-  Divider
-} from 'antd';
-import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer, Sector } from 'recharts';
-import { 
-  ArrowLeftOutlined, 
-  TeamOutlined, 
-  BookOutlined, 
-  FileTextOutlined,
-  FilterOutlined,
-  SearchOutlined,
-  RiseOutlined,
-  ReloadOutlined,
-  EyeOutlined, 
-  FileSearchOutlined, 
-  LinkOutlined, 
-  FilePdfOutlined 
-} from '@ant-design/icons';
-import './style.css';
+import React, { useState, useEffect, useCallback, useMemo, useReducer, useRef } from 'react';
+import { Card, Button, Typography, Row, Col, Space, Radio, Statistic, Select, Tag, Input, Skeleton, Empty, Alert, Modal, Divider } from 'antd';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from 'recharts';
+import { ArrowLeftOutlined, TeamOutlined, BookOutlined, FileTextOutlined, FilterOutlined, RiseOutlined, ReloadOutlined, EyeOutlined, FileSearchOutlined, LinkOutlined, FilePdfOutlined } from '@ant-design/icons';
+import { debounce } from 'lodash';
+import InfiniteScroll from 'react-infinite-scroll-component';
 import api from "../utils/api";
+import { useAuth } from '../utils/auth';
 
-const { Search } = Input;
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 
-const COLORS = ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2'];
-
-
-
-const ResearchDashboard = () => {
-  // Constants
-  const arrayFields = useMemo(() => ({
+// Constants and Configuration
+const CONFIG = {
+  arrayFields: {
     authors: 'authors',
     categories: 'categories',
-  }), []);
-
-  const fields = useMemo(() => ({
+  },
+  fields: {
     title: 'title',
     abstract: 'abstract',
     date: 'publication_date',
@@ -57,526 +23,54 @@ const ResearchDashboard = () => {
       url: 'url',
       pdfUrl: 'pdf_url'
     }
-  }), []);
-
-  // States
-  const [mainData, setMainData] = useState({
-    yearData: [],
-    categoryData: [],
-    originalCategoryData: []
-  });
-  const [selectedTopic, setSelectedTopic] = useState(null);
-  const [selectedYear, setSelectedYear] = useState(null);
-  const [detailData, setDetailData] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState(null);
-  const [analysisMode, setAnalysisMode] = useState('categories');
-  const [selectedTimeRange, setSelectedTimeRange] = useState('all');
-  const [selectedFilters, setSelectedFilters] = useState({});
-  const [filteredData, setFilteredData] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [hasData, setHasData] = useState(false);
-  const [error, setError] = useState(null);
-  const [searchResults, setSearchResults] = useState([]);
-
-  // Memoized data processing functions
-  const processMainData = useCallback((mode, data) => {
-    const field = arrayFields[mode] || mode;
-    
-    try {
-      // Process year data using reduce for better performance
-      const yearMap = data.reduce((acc, item) => {
-        const year = new Date(item[fields.date]).getFullYear();
-        acc.set(year, (acc.get(year) || 0) + 1);
-        return acc;
-      }, new Map());
-
-      const yearChartData = Array.from(yearMap.entries())
-        .map(([name, value]) => ({
-          name: name.toString(),
-          value,
-          items: data.filter(item => 
-            new Date(item[fields.date]).getFullYear().toString() === name.toString()
-          )
-        }))
-        .sort((a, b) => b.name - a.name);
-
-      // Process category data using reduce
-      const categoryData = data.reduce((acc, item) => {
-        const values = Array.isArray(item[field]) ? item[field] : [item[field]];
-        values.forEach(value => {
-          if (!value) return;
-          acc.set(value, (acc.get(value) || 0) + 1);
-        });
-        return acc;
-      }, new Map());
-
-      const categoryChartData = Array.from(categoryData.entries())
-        .map(([name, value]) => ({
-          name,
-          value,
-          items: data.filter(item => {
-            if (Array.isArray(item[field])) return item[field].includes(name);
-            return item[field] === name;
-          })
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10);
-
-      setMainData({
-        yearData: yearChartData,
-        categoryData: categoryChartData,
-        originalCategoryData: categoryChartData
-      });
-      setError(null);
-    } catch (err) {
-      setError('Error processing data. Please try again.');
-      console.error('Error in processMainData:', err);
-    }
-  }, [arrayFields, fields.date]);
-
-  // Memoized filter function
-  const applyDataFilters = useCallback(() => {
-    try {
-      let filtered = [...searchResults];
-
-      if (selectedTimeRange !== 'all') {
-        const now = new Date();
-        const months = {
-          'last_3_months': 3,
-          'last_6_months': 6,
-          'last_year': 12
-        }[selectedTimeRange];
-        
-        if (months) {
-          const cutoff = new Date(now.setMonth(now.getMonth() - months));
-          filtered = filtered.filter(item => new Date(item[fields.date]) >= cutoff);
-        }
-      }
-
-      filtered = Object.entries(selectedFilters).reduce((acc, [field, values]) => {
-        if (!values?.length) return acc;
-        return acc.filter(item => {
-          const itemValues = Array.isArray(item[field]) ? item[field] : [item[field]];
-          return itemValues.some(value => values.includes(value));
-        });
-      }, filtered);
-
-      setFilteredData(filtered);
-      setHasData(filtered.length > 0);
-      processMainData(analysisMode, filtered);
-    } catch (err) {
-      setError('Error applying filters. Please try again.');
-      console.error('Error in applyDataFilters:', err);
-    }
-  }, [searchResults, selectedTimeRange, selectedFilters, fields.date, analysisMode, processMainData]);
-
-  // Event Handlers
-  const handleSearch = useCallback(async (value) => {
-    if (!value.trim()) {
-      setError('Please enter a search term');
-      return;
-    }
-
-    setIsLoading(true);
-    setSearchQuery(value);
-    setError(null);
-    setSelectedTopic(null);
-    setSelectedYear(null);
-    setSelectedCategoryIndex(null);
-    
-    try {
-      const response = await api.scraping().getPapaerWithoutPagination({ search: value });
-      const results = response.data;
-      
-      setSearchResults(results);
-      setFilteredData(results);
-      setHasData(results.length > 0);
-      setSelectedFilters({});
-      setSelectedTimeRange('all');
-      
-      processMainData(analysisMode, results);
-    } catch (err) {
-      setError('Search failed. Please try again.');
-      console.error('Search error:', err);
-      setHasData(false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [analysisMode, processMainData]);
-
-
-  useEffect(() => {
-
-
-    async function fetchData() {
-    
-      await handleSearch("machine learning");
-
-    }
-
-    fetchData();
-  },[])
-  const handleYearClick = useCallback((data) => {
-    if (!data?.payload) return;
-    
-    const year = data.payload.name;
-    setSelectedYear(year);
-    
-    const yearFilteredData = filteredData.filter(item => 
-      new Date(item[fields.date]).getFullYear().toString() === year
-    );
-
-    const field = arrayFields[analysisMode] || analysisMode;
-    const categorizedData = yearFilteredData.reduce((acc, item) => {
-      const values = Array.isArray(item[field]) ? item[field] : [item[field]];
-      values.forEach(value => {
-        if (!value) return;
-        acc.set(value, (acc.get(value) || 0) + 1);
-      });
-      return acc;
-    }, new Map());
-
-    const categoryChartData = Array.from(categorizedData.entries())
-      .map(([name, value]) => ({
-        name,
-        value,
-        items: yearFilteredData.filter(item => {
-          if (Array.isArray(item[field])) return item[field].includes(name);
-          return item[field] === name;
-        })
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    setMainData(prev => ({
-      ...prev,
-      categoryData: categoryChartData
-    }));
-    
-    setSelectedTopic(`Year ${year}`);
-    setDetailData(yearFilteredData);
-  }, [analysisMode, arrayFields, fields.date, filteredData]);
-
-  const handleCategoryClick = useCallback((data, index) => {
-    if (!data?.payload) return;
-    
-    setSelectedCategoryIndex(index);
-    const category = data.payload.name;
-    const field = arrayFields[analysisMode] || analysisMode;
-    
-    let filteredItems = filteredData;
-    
-    if (selectedYear) {
-      filteredItems = filteredItems.filter(item => 
-        new Date(item[fields.date]).getFullYear().toString() === selectedYear
-      );
-    }
-    
-    filteredItems = filteredItems.filter(item => {
-      if (Array.isArray(item[field])) return item[field].includes(category);
-      return item[field] === category;
-    });
-    
-    setSelectedTopic(selectedYear ? `${category} (${selectedYear})` : category);
-    setDetailData(filteredItems);
-  }, [analysisMode, arrayFields, fields.date, filteredData, selectedYear]);
-
-  const handleReset = useCallback(() => {
-    setSearchQuery('');
-    setSelectedFilters({});
-    setSelectedTimeRange('all');
-    setFilteredData([]);
-    setSearchResults([]);
-    setHasData(false);
-    setError(null);
-    setSelectedTopic(null);
-    setSelectedYear(null);
-    setSelectedCategoryIndex(null);
-    setMainData({
-      yearData: [],
-      categoryData: [],
-      originalCategoryData: []
-    });
-  }, []);
-
-  const handleBackClick = useCallback(() => {
-    setSelectedTopic(null);
-    setSelectedYear(null);
-    setSelectedCategoryIndex(null);
-    setMainData(prev => ({
-      ...prev,
-      categoryData: prev.originalCategoryData
-    }));
-    setDetailData([]);
-  }, []);
-
-  // Effects
-  useEffect(() => {
-    if (searchResults.length > 0) {
-      applyDataFilters();
-    }
-  }, [analysisMode, selectedTimeRange, selectedFilters, searchResults, applyDataFilters]);
-
-  // Memoized filter options
-  const filterOptions = useMemo(() => {
-    return Object.entries(arrayFields).map(([key, field]) => ({
-      key,
-      field,
-      options: Array.from(new Set(searchResults.flatMap(item => item[field])))
-        .map(value => ({ value, label: value }))
-    }));
-  }, [arrayFields, searchResults]);
-
-  const timeRangeOptions = useMemo(() => [
+  },
+  chart: {
+    colors: ['#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2'],
+    itemsPerPage: 10,
+    batchSize: 100,
+    debounceDelay: 300
+  },
+  timeRangeOptions: [
     { value: 'all', label: 'All Time' },
     { value: 'last_year', label: 'Last Year' },
     { value: 'last_6_months', label: 'Last 6 Months' },
     { value: 'last_3_months', label: 'Last 3 Months' }
-  ], []);
-
-
-
-  return (
-    <div className="research-dashboard">
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        {/* Search Header */}
-        {/* <Row gutter={[16, 16]} align="middle">
-          <Col flex="auto">
-            <Search
-              placeholder="Search by title, abstract, authors, or categories..."
-              allowClear
-              enterButton={<Button type="primary" icon={<SearchOutlined />}>Search</Button>}
-              size="large"
-              onSearch={handleSearch}
-              loading={isLoading}
-              defaultValue={searchQuery}
-            />
-          </Col>
-          {searchResults.length > 0 && (
-            <Col>
-              <Button 
-                icon={<ReloadOutlined />}
-                onClick={handleReset}
-                disabled={isLoading}
-              >
-                Reset
-              </Button>
-            </Col>
-          )}
-        </Row> */}
-
-        {/* Error Message */}
-        {error && (
-          <Alert
-            message="Error"
-            description={error}
-            type="error"
-            closable
-            onClose={() => setError(null)}
-          />
-        )}
-
-        {/* Main Content */}
-        {isLoading ? (
-          <SkeletonUI />
-        ) : !searchResults.length ? (
-          <InitialState />
-        ) : !hasData ? (
-          <NoDataUI searchQuery={searchQuery} onReset={handleReset} />
-        ) : (
-          <>
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Card 
-                  title={
-                    <Row justify="space-between" align="middle" style={{ width: '100%' }}>
-                      <Space>
-                        {selectedTopic && (
-                          <Button 
-                            icon={<ArrowLeftOutlined />} 
-                            onClick={handleBackClick}
-                          />
-                        )}
-                        <RiseOutlined />
-                        <span>Primary Distribution</span>
-                      </Space>
-                      <Radio.Group 
-                        value={analysisMode}
-                        onChange={(e) => setAnalysisMode(e.target.value)}
-                        buttonStyle="solid"
-                        size="small"
-                      >
-                        {Object.keys(arrayFields).map(field => (
-                          <Radio.Button key={field} value={field}>
-                            <BookOutlined /> {field.charAt(0).toUpperCase() + field.slice(1)}
-                          </Radio.Button>
-                        ))}
-                      </Radio.Group>
-                    </Row>
-                  }
-                >
-                  <div style={{ height: 500 }}>
-                    <ResponsiveContainer>
-                      <PieChart>
-                      <Pie
-                          activeIndex={selectedCategoryIndex !== null ? selectedCategoryIndex : activeIndex}
-                          activeShape={RenderActiveShape}
-                          data={mainData.categoryData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={140}
-                          outerRadius={210}
-                          paddingAngle={5}
-                          dataKey="value"
-                          onMouseEnter={(_, index) => setActiveIndex(index)}
-                          onClick={(data, index) => handleCategoryClick(data, index)}
-                          cursor="pointer"
-                          label={renderLabel}
-                          labelLine={false}
-                        >
-                          {mainData.categoryData.map((_, index) => (
-                            <Cell key={`category-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Pie
-                          data={mainData.yearData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={80}
-                          outerRadius={130}
-                          paddingAngle={2}
-                          dataKey="value"
-                          onClick={handleYearClick}
-                          cursor="pointer"
-                          label={renderLabel}
-                          labelLine={false}
-                        >
-                          {mainData.yearData.map((_, index) => (
-                            <Cell key={`year-${index}`} fill={COLORS[(index + 3) % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        
-                        <Tooltip />
-                        {/* <Legend  ></Legend> */}
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-              </Col>
-
-              <Col span={12}>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  {/* Statistics */}
-                  <Card>
-                    <Row gutter={[16, 16]}>
-                      <Col span={8}>
-                        <Statistic 
-                          title={<Space><FileTextOutlined /> Total Items</Space>}
-                          value={filteredData.length}
-                        />
-                      </Col>
-                      {Object.entries(arrayFields).map(([key, field]) => (
-                        <Col span={8} key={key}>
-                          <Statistic 
-                            title={
-                              <Space>
-                                <TeamOutlined /> 
-                                {key.charAt(0).toUpperCase() + key.slice(1)}
-                              </Space>
-                            }
-                            value={new Set(filteredData.flatMap(item => item[field])).size}
-                          />
-                        </Col>
-                      ))}
-                    </Row>
-                  </Card>
-
-                  {/* Filters */}
-                  <Card
-                    title={
-                      <Space>
-                        <FilterOutlined />
-                        <span>Analysis Filters</span>
-                      </Space>
-                    }
-                  >
-                    <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                      {/* Time Filter */}
-                      <div>
-                        <Text strong>Time Period</Text>
-                        <Select 
-                          style={{ width: '100%', marginTop: 8 }}
-                          value={selectedTimeRange}
-                          onChange={(value) => setSelectedTimeRange(value)}
-                          options={timeRangeOptions}
-                        />
-                      </div>
-
-                      {/* Dynamic Filters */}
-                      {filterOptions.map(({ key, field, options }) => (
-                        <div key={key}>
-                          <Text strong>{key.charAt(0).toUpperCase() + key.slice(1)}</Text>
-                          <Select 
-                            mode="multiple"
-                            style={{ width: '100%', marginTop: 8 }}
-                            placeholder={`Select ${key}`}
-                            value={selectedFilters[field] || []}
-                            onChange={(values) => setSelectedFilters(prev => ({ ...prev, [field]: values }))}
-                            options={options}
-                            maxTagCount={3}
-                          />
-                        </div>
-                      ))}
-                    </Space>
-                  </Card>
-                </Space>
-              </Col>
-            </Row>
-
-            {/* Detail Section */}
-            {selectedTopic && detailData && (
-              <Card 
-                title={
-                  <Space>
-                    <FileTextOutlined />
-                    {`${selectedTopic} - Detailed Analysis`}
-                  </Space>
-                }
-                style={{ marginTop: 16 }}
-                extra={
-                  <Tag color="blue">
-                    {detailData.length} {detailData.length === 1 ? 'item' : 'items'}
-                  </Tag>
-                }
-              >
-                <div className="item-list">
-                  {detailData.map((item, index) => (
-                    <ItemCard
-                      key={index}
-                      item={item}
-                      arrayFields={arrayFields}
-                      titleField={fields.title}
-                      abstractField={fields.abstract}
-                      linkFields={fields.links}
-                    />
-                  ))}
-                </div>
-              </Card>
-            )}
-          </>
-        )}
-      </Space>
-    </div>
-  );
+  ]
 };
 
-export default React.memo(ResearchDashboard);
 
+const processChartData = (dataMap, limit = false) => {
+  let data = Array.from(dataMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  return limit ? data.slice(0, 10) : data;
+};
 
+const filterData = (data, timeRange, filters) => {
+  return data.filter(item => {
+    if (timeRange !== 'all') {
+      const date = new Date(item[CONFIG.fields.date]);
+      const now = new Date();
+      const months = {
+        'last_3_months': 3,
+        'last_6_months': 6,
+        'last_year': 12
+      }[timeRange];
+      
+      if (months && date < new Date(now.setMonth(now.getMonth() - months))) {
+        return false;
+      }
+    }
+    
+    return Object.entries(filters).every(([field, values]) => {
+      if (!values?.length) return true;
+      const itemValues = Array.isArray(item[field]) ? item[field] : [item[field]];
+      return values.some(value => itemValues.includes(value));
+    });
+  });
+};
 
-
+// Chart Components
 const RenderActiveShape = React.memo(({ cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value }) => (
   <g>
     <text x={cx} y={cy - 20} textAnchor="middle" fill="#000">
@@ -606,296 +100,599 @@ const RenderActiveShape = React.memo(({ cx, cy, innerRadius, outerRadius, startA
   </g>
 ));
 
-// Memoized UI Components
-const SkeletonUI = React.memo(() => (
-  <Space direction="vertical" size="large" style={{ width: '100%' }}>
-    <Row gutter={[16, 16]}>
-      <Col span={12}>
-        <Card>
-          <Skeleton.Avatar size={200} active shape="circle" />
-          <Skeleton active />
-        </Card>
-      </Col>
-      <Col span={12}>
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Card>
-            <Skeleton.Button active block size="large" />
-            <Skeleton active paragraph={{ rows: 1 }} />
-          </Card>
-          <Card>
-            <Skeleton.Input active size="large" block />
-            <Skeleton active paragraph={{ rows: 4 }} />
-          </Card>
-        </Space>
-      </Col>
-    </Row>
-  </Space>
-));
 
-const InitialState = React.memo(() => (
-  <Card style={{ textAlign: 'center', padding: '40px' }}>
-    <Space direction="vertical" size="large">
-      <FileTextOutlined style={{ fontSize: '48px', color: '#bfbfbf' }} />
-      <Text type="secondary">
-        Enter a search term to begin exploring the research papers
-      </Text>
-    </Space>
-  </Card>
-));
+// Main Component
+const ResearchDashboard = () => {
+  const { state, dispatch } = useAuth();
+  
 
-const NoDataUI = React.memo(({ searchQuery, onReset }) => (
-  <Card style={{ textAlign: 'center', padding: '40px' }}>
-    <Space direction="vertical" size="large">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={
-          <Text type="secondary">
-            {searchQuery 
-              ? `No results found for "${searchQuery}"`
-              : 'No data available'}
-          </Text>
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      if (!state.searchCache) {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        try {
+          const response = await api.scraping().getPapaerWithoutPagination({ search: "m" });
+          dispatch({ type: 'INITIALIZE_DATA', payload: response.data });
+        } catch (err) {
+          dispatch({ type: 'SET_ERROR', payload: 'Failed to load data' });
+        } finally {
+          dispatch({ type: 'SET_LOADING', payload: false });
         }
-      />
-      <Button type="primary" onClick={onReset} icon={<ReloadOutlined />}>
-        Reset Search
-      </Button>
-    </Space>
-  </Card>
-));
+      }
+    };
+    fetchInitialData();
+  }, []);
+ 
 
-const renderLabel = (props) => {
-  const { 
-    cx, 
-    cy, 
-    midAngle, 
-    innerRadius, 
-    outerRadius, 
-    value, 
-    name, 
-    startAngle, 
-    endAngle 
-  } = props;
-  
-  const RADIAN = Math.PI / 180;
-  const arcLength = Math.abs(endAngle - startAngle);
-  
-  // Calculate the middle radius for text placement
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-  
-  // Calculate position
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  
-  // Calculate available width based on arc length and radius
-  const availableWidth = 2 * Math.PI * radius * (arcLength / 360);
-  
-  // Dynamic font sizing based on segment size and text length
-  let fontSize = 14; // Default size
-  if (arcLength < 6) {
-    return null; // Don't render text for very small segments
-  } 
-  else if (arcLength < 15) {
-    fontSize=6;
+  const processMainData = useCallback((mode, data) => {
+    if (!data?.length) return;
     
-  } else if (arcLength < 30) {
-    fontSize = 8;
-  } else if (arcLength < 45) {
-    fontSize = 10;
-  } else if (name.length > 20) {
-    // Reduce font size for long text
-    fontSize = Math.min(14, Math.floor(availableWidth / name.length) * 1.5);
-  }
-  
-  // For very large segments (like main categories)
-  if (arcLength > 60) {
-    fontSize = Math.min(18, fontSize); // Cap maximum size
-  }
-  
-  // Split long text into multiple lines if segment is large enough
-  const words = name.split(' ');
-  const shouldWrap = arcLength > 45 && words.length > 1;
-  
-  if (shouldWrap) {
-    // Calculate middle word index
-    const middleIndex = Math.floor(words.length / 2);
-    const firstLine = words.slice(0, middleIndex).join(' ');
-    const secondLine = words.slice(middleIndex).join(' ');
+    const field = CONFIG.arrayFields[mode] || mode;
+    const yearMap = new Map();
+    const categoryMap = new Map();
+    
+    data.forEach(item => {
+      const year = new Date(item[CONFIG.fields.date]).getFullYear();
+      const yearEntry = yearMap.get(year) || { value: 0, items: [] };
+      yearEntry.value += 1;
+      yearEntry.items.push(item);
+      yearMap.set(year, yearEntry);
+      
+      const values = Array.isArray(item[field]) ? item[field] : [item[field]];
+      values.forEach(value => {
+        if (value) {
+          const categoryEntry = categoryMap.get(value) || { value: 0, items: [] };
+          categoryEntry.value += 1;
+          categoryEntry.items.push(item);
+          categoryMap.set(value, categoryEntry);
+        }
+      });
+    });
+    
+    const yearData = Array.from(yearMap.entries())
+      .map(([name, { value, items }]) => ({ name: name.toString(), value, items }))
+      .sort((a, b) => b.name - a.name);
+      
+    const categoryData = Array.from(categoryMap.entries())
+      .map(([name, { value, items }]) => ({ name, value, items }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+      
+    dispatch({
+      type: 'SET_MAIN_DATA',
+      payload: {
+        yearData,
+        categoryData
+      }
+    });
+  }, [dispatch]);
+
+
+
+  useEffect(() => {
+    if (state.searchResults.length) {
+      const applyFilters = debounce(() => {
+        const filtered = filterData(state.searchResults, state.selectedTimeRange, state.selectedFilters);
+        dispatch({ type: 'SET_FILTERED_DATA', payload: filtered });
+        processMainData(state.analysisMode, filtered);
+      }, CONFIG.chart.debounceDelay);
+      
+      applyFilters();
+      return () => applyFilters.cancel();
+    }
+  }, [state.searchResults, state.selectedTimeRange, state.selectedFilters, state.analysisMode, processMainData]);
+
+  const renderLabel = useCallback((props) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, name, startAngle, endAngle } = props;
+    const RADIAN = Math.PI / 180;
+    const arcLength = Math.abs(endAngle - startAngle);
+    
+    if (arcLength < 6) return null;
+    
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    
+    let fontSize = Math.min(14, arcLength < 15 ? 6 : arcLength < 30 ? 8 : arcLength < 45 ? 10 : 14);
+    if (name.length > 20) {
+      fontSize = Math.min(fontSize, Math.floor((2 * Math.PI * radius * (arcLength / 360)) / name.length) * 1.5);
+    }
     
     return (
-      <g>
-        <text 
-          x={x} 
-          y={y - fontSize/2}
-          fill="white" 
-          textAnchor="middle" 
-          dominantBaseline="central"
-          style={{
-            fontSize: `${fontSize}px`,
-            fontWeight: 500
-          }}
-        >
-          {firstLine}
-        </text>
-        <text 
-          x={x} 
-          y={y + fontSize/2}
-          fill="white" 
-          textAnchor="middle" 
-          dominantBaseline="central"
-          style={{
-            fontSize: `${fontSize}px`,
-            fontWeight: 500
-          }}
-        >
-          {secondLine}
-        </text>
-      </g>
+      <text 
+        x={x} 
+        y={y}
+        fill="white" 
+        textAnchor="middle" 
+        dominantBaseline="central"
+        style={{
+          fontSize: `${fontSize}px`,
+          fontWeight: 500
+        }}
+      >
+        {name =='Natural Language Processing' ? 'NLP' : name}
+      </text>
     );
-  }
-  
-  // Single line text
+  }, []);
   return (
-    <text 
-      x={x} 
-      y={y}
-      fill="white" 
-      textAnchor="middle" 
-      dominantBaseline="central"
-      style={{
-        fontSize: `${fontSize}px`,
-        fontWeight: 500
-      }}
-    >
-      {name=='Natural Language Processing'? 'NLP':name}
-    </text>
+    <div className="research-dashboard" style={{
+      padding: 24,
+      width: '100%',
+      maxWidth: '100%',
+      overflowX: 'hidden'
+      
+    }}>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        {state.error && (
+          <Alert
+            message="Error"
+            description={state.error}
+            type="error"
+            closable
+            onClose={() => dispatch({ type: 'CLEAR_ERROR' })}
+          />
+        )}
+        
+        {state.isLoading ? (
+          <SkeletonUI />
+        ) : !state.searchResults.length ? (
+          <InitialState />
+        ) : !state.hasData ? (
+          <NoDataUI 
+            searchQuery={state.searchQuery} 
+            onReset={() => dispatch({ type: 'RESET' })} 
+          />
+        ) : (
+          <MainContent state={state} dispatch={dispatch} renderLabel={renderLabel} />
+        )}
+      </Space>
+    </div>
   );
 };
 
-const ItemCard = React.memo (({ 
-  item, 
-  titleField, 
-  abstractField, 
-  arrayFields, 
-  linkFields 
-}) => {
+// UI Components
+const MainContent = React.memo(({ state, dispatch, renderLabel }) => (
+  <>
+    <Row gutter={[16, 16]}>
+      <Col span={12}>
+        <ChartCard state={state} dispatch={dispatch} renderLabel={renderLabel} />
+      </Col>
+      <Col span={12}>
+        <StatisticsCard state={state} />
+        <FiltersCard state={state} dispatch={dispatch} />
+      </Col>
+    </Row>
+    {state.selectedTopic && <DetailSection state={state} dispatch={dispatch} />}
+  </>
+));
+
+
+const ChartCard = React.memo(({ state, dispatch,renderLabel }) => {
+  const { mainData, selectedCategoryIndex, activeIndex, analysisMode, selectedTopic } = state;
+
+
+
+  const handleYearClick = useCallback((data) => {
+    if (!data?.payload) return;
+    
+    const year = data.payload.name;
+    const yearFilteredData = state.filteredData.filter(item => 
+      new Date(item[CONFIG.fields.date]).getFullYear().toString() === year
+    );
+    
+    const field = CONFIG.arrayFields[state.analysisMode];
+    const categoryData = yearFilteredData.reduce((acc, item) => {
+      const values = Array.isArray(item[field]) ? item[field] : [item[field]];
+      values.forEach(value => {
+        if (!value) return;
+        const entry = acc.get(value) || { value: 0, items: [] };
+        entry.value += 1;
+        entry.items.push(item);
+        acc.set(value, entry);
+      });
+      return acc;
+    }, new Map());
+  
+    const newCategoryData = Array.from(categoryData.entries())
+      .map(([name, entry]) => ({
+        name,
+        value: entry.value,
+        items: entry.items
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
+  
+    dispatch({ 
+      type: 'SELECT_YEAR', 
+      payload: { 
+        data,
+        categoryData: newCategoryData,
+        items: yearFilteredData
+      } 
+    });
+  }, [state.filteredData, state.analysisMode]);
+
+  const handleCategoryClick = useCallback((data, index) => {
+    dispatch({
+      type: 'SELECT_CATEGORY',
+      payload: {
+        data,
+        index,
+        items: state.filteredData.filter(item => {
+          const categories = Array.isArray(item.categories) ? item.categories : [item.categories];
+          return categories.includes(data.payload.name);
+        })
+      }
+    });
+  }, [state.filteredData]);
+  return (
+    <Card 
+      title={
+        <Row justify="space-between" align="middle" style={{ width: '100%' }}>
+          <Space>
+            {selectedTopic && (
+              <Button 
+                icon={<ArrowLeftOutlined />}
+                onClick={() => dispatch({ type: 'RESET_SELECTION' })}
+              />
+            )}
+            <RiseOutlined />
+            <span>Primary Distribution</span>
+          </Space>
+          <Radio.Group 
+            value={analysisMode}
+            onChange={(e) => dispatch({ type: 'SET_ANALYSIS_MODE', payload: e.target.value })}
+            buttonStyle="solid"
+            size="small"
+          >
+            {Object.keys(CONFIG.arrayFields).map(field => (
+              <Radio.Button key={field} value={field}>
+                <BookOutlined /> {field.charAt(0).toUpperCase() + field.slice(1)}
+              </Radio.Button>
+            ))}
+          </Radio.Group>
+        </Row>
+      }
+    >
+      <div style={{ height: 500 }}>
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              activeIndex={selectedCategoryIndex ?? activeIndex}
+              activeShape={RenderActiveShape}
+              data={mainData.categoryData}
+              cx="50%"
+              cy="50%"
+              innerRadius={140}
+              outerRadius={210}
+              paddingAngle={5}
+              dataKey="value"
+              onMouseEnter={(_, index) => dispatch({ type: 'SET_ACTIVE_INDEX', payload: index })}
+              onClick={(data, index) => dispatch({ type: 'SELECT_CATEGORY', payload: { data, index } })}
+              cursor="pointer"
+              label={renderLabel}
+              labelLine={false}
+            >
+              {mainData.categoryData.map((_, index) => (
+                <Cell key={`category-${index}`} fill={CONFIG.chart.colors[index % CONFIG.chart.colors.length]} />
+              ))}
+            </Pie>
+            <Pie
+              data={mainData.yearData}
+              cx="50%"
+              cy="50%"
+              innerRadius={80}
+              outerRadius={130}
+              paddingAngle={2}
+              dataKey="value"
+              onClick={handleYearClick}
+              cursor="pointer"
+              label={renderLabel}
+              labelLine={false}
+            >
+              {mainData.yearData.map((_, index) => (
+                <Cell key={`year-${index}`} fill={CONFIG.chart.colors[(index + 3) % CONFIG.chart.colors.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
+  );
+});
+
+const StatisticsCard = React.memo(({ state }) => {
+  const { filteredData } = state;
+  
+  return (
+    <Card>
+      <Row gutter={[16, 16]}>
+        <Col span={8}>
+          <Statistic 
+            title={<Space><FileTextOutlined /> Total Items</Space>}
+            value={filteredData.length}
+          />
+        </Col>
+        {Object.entries(CONFIG.arrayFields).map(([key, field]) => (
+          <Col span={8} key={key}>
+            <Statistic 
+              title={<Space><TeamOutlined /> {key.charAt(0).toUpperCase() + key.slice(1)}</Space>}
+              value={new Set(filteredData.flatMap(item => item[field])).size}
+            />
+          </Col>
+        ))}
+      </Row>
+    </Card>
+  );
+});
+
+const FiltersCard = React.memo(({ state, dispatch }) => {
+  const { selectedTimeRange, selectedFilters, searchResults } = state;
+
+  const getFilterOptions = (field) => {
+    if (field === "source") {
+      return Array.from(new Set(searchResults.map(item => item.source)))
+        .filter(Boolean)
+        .map(value => ({ value, label: value }));
+    }
+    if (field === "authors" || field === "categories") {
+      return Array.from(new Set(searchResults.flatMap(item => item[field])))
+        .filter(Boolean)
+        .map(value => ({ value, label: value }));
+    }
+    return [];
+  };
+
+  return (
+    <Card
+      title={<Space><FilterOutlined />Analysis Filters</Space>}
+      style={{ marginTop: 16 }}
+      className="filter-card"
+    >
+      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+        <div>
+          <Text strong>Time Period</Text>
+          <Select 
+            style={{ width: '100%', marginTop: 8 }}
+            value={selectedTimeRange}
+            onChange={(value) => dispatch({ type: 'SET_TIME_RANGE', payload: value })}
+            options={CONFIG.timeRangeOptions}
+          />
+        </div>
+
+        <div>
+          <Text strong>Source</Text>
+          <Select
+            mode="multiple"
+            style={{ width: '100%', marginTop: 8 }}
+            placeholder="Select sources"
+            value={selectedFilters.source || []}
+            onChange={(values) => dispatch({
+              type: 'SET_FILTER',
+              payload: { field: 'source', values }
+            })}
+            options={getFilterOptions('source')}
+            maxTagCount={2}
+          />
+        </div>
+
+        <div>
+          <Text strong>Authors</Text>
+          <Select 
+            mode="multiple"
+            style={{ width: '100%', marginTop: 8 }}
+            placeholder="Select authors"
+            value={selectedFilters.authors || []}
+            onChange={(values) => dispatch({
+              type: 'SET_FILTER',
+              payload: { field: 'authors', values }
+            })}
+            options={getFilterOptions('authors')}
+            maxTagCount={2}
+          />
+        </div>
+
+        <div>
+          <Text strong>Categories</Text>
+          <Select 
+            mode="multiple"
+            style={{ width: '100%', marginTop: 8 }}
+            placeholder="Select categories"
+            value={selectedFilters.categories || []}
+            onChange={(values) => dispatch({
+              type: 'SET_FILTER',
+              payload: { field: 'categories', values }
+            })}
+            options={getFilterOptions('categories')}
+            maxTagCount={2}
+          />
+        </div>
+      </Space>
+    </Card>
+  );
+});
+
+const DetailSection = React.memo(({ state, dispatch }) => {
+  const { selectedTopic, selectedYear, detailData } = state;
+  const [visibleItems, setVisibleItems] = useState([]);
+  const [page, setPage] = useState(0);
+  const getDetailTitle = () => {
+    if (selectedYear && selectedTopic && !selectedTopic.startsWith('Year')) {
+      return `${selectedTopic} (${selectedYear}) - Detailed Analysis`;
+    }
+    return `${selectedTopic} - Detailed Analysis`;
+  };
+
+  useEffect(() => {
+    setVisibleItems([]);
+    setPage(0);
+    if (detailData.length) {
+      const initialItems = detailData.slice(0, CONFIG.chart.itemsPerPage);
+      setVisibleItems(initialItems);
+      setPage(1);
+    }
+  }, [detailData]);
+
+  const loadMoreItems = useCallback(() => {
+    const start = page * CONFIG.chart.itemsPerPage;
+    const end = start + CONFIG.chart.itemsPerPage;
+    const newItems = detailData.slice(start, end);
+    
+    if (newItems.length) {
+      setVisibleItems(prev => [...prev, ...newItems]);
+      setPage(prev => prev + 1);
+    }
+  }, [page, detailData]);
+
+  return (
+    <Card 
+      title={<Space><FileTextOutlined />{getDetailTitle()}</Space>}
+      style={{ marginTop: 16, maxHeight: '600px', overflow: 'auto' }}
+      extra={<Tag color="blue">{detailData.length} items</Tag>}
+      id="scrollableDiv"
+    >
+      <style>
+        {
+          `#scrollableDiv {
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 #f0f0f0;
+}
+
+#scrollableDiv::-webkit-scrollbar {
+  width: 6px;
+}
+
+#scrollableDiv::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+#scrollableDiv::-webkit-scrollbar {
+ display: none !important;
+}
+
+#scrollableDiv {
+ -ms-overflow-style: none;  /* IE and Edge */
+ scrollbar-width: none;  /* Firefox */
+}`
+        }
+      </style>
+      <InfiniteScroll
+        dataLength={visibleItems.length}
+        next={loadMoreItems}
+        hasMore={visibleItems.length < detailData.length}
+        loader={<Skeleton active paragraph={{ rows: 1 }} />}
+        scrollableTarget="scrollableDiv"
+      >
+        {visibleItems.map((item, index) => (
+          <ItemCard key={`${item.id || index}-${index}`} item={item} />
+        ))}
+      </InfiniteScroll>
+    </Card>
+  );
+});
+
+const ItemCard = React.memo(({ item }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const showModal = () => setIsModalOpen(true);
-  const handleCancel = () => setIsModalOpen(false);
-
-  const renderDetailItem = (label, value) => (
+  const renderDetailItem = useCallback((label, value) => (
     <div style={{ marginBottom: 16 }}>
       <Text strong>{label}: </Text>
       {Array.isArray(value) ? (
-        <div style={{ marginTop: 8 }}>
+        <Space wrap>
           {value.map((v, i) => (
-            <Tag key={i} style={{ marginBottom: 4 }}>{v}</Tag>
+            <Tag key={i}>{v}</Tag>
           ))}
-        </div>
-      ) : typeof value === 'boolean' ? (
-        <Tag color={value ? 'green' : 'red'}>
-          {value ? 'Yes' : 'No'}
-        </Tag>
+        </Space>
       ) : (
         <Text>{value}</Text>
       )}
     </div>
-  );
+  ), []);
 
   return (
     <>
       <Card 
-        title={item[titleField]}
-        className="item-card" 
-        style={{ marginBottom: 16 }}
         hoverable
+        className="item-card"
+        style={{ marginBottom: 16 }}
+        title={item[CONFIG.fields.title]}
         extra={
           <Button 
             type="text" 
-            icon={<EyeOutlined />} 
-            onClick={showModal}
+            icon={<EyeOutlined />}
+            onClick={() => setIsModalOpen(true)}
             title="View Details"
           />
         }
       >
-        {/* <Title level={5}>{item[titleField]}</Title> */}
         <Space direction="vertical" size="small">
-          {Object.entries(arrayFields).map(([key, field]) => (
-            <Text key={key} type="secondary">
-              <TeamOutlined /> {key.charAt(0).toUpperCase() + key.slice(1)}: {
-                Array.isArray(item[field]) ? item[field].join(', ') : item[field]
-              }
-            </Text>
-          ))}
-          <Paragraph 
-            ellipsis={{ 
-              rows: 2, 
-              expandable: true, 
-              symbol: 'more' 
-            }}
-          >
-            {item[abstractField]}
+          <Text type="secondary">
+            <TeamOutlined /> Authors: {item[CONFIG.arrayFields.authors].join(', ')}
+          </Text>
+          <Text type="secondary">
+            <BookOutlined /> Categories: {item[CONFIG.arrayFields.categories].join(', ')}
+          </Text>
+          <Paragraph ellipsis={{ rows: 2, expandable: true, symbol: 'more' }}>
+            {item[CONFIG.fields.abstract]}
           </Paragraph>
           <Space>
-            {Object.entries(linkFields).map(([key, field]) => (
-              item[field] && (
-                <Button key={key} type="link" href={item[field]} target="_blank">
-                  {key.charAt(0).toUpperCase() + key.slice(1)}
-                </Button>
-              )
-            ))}
+            {item[CONFIG.fields.links.url] && (
+              <Button type="link" href={item[CONFIG.fields.links.url]} target="_blank">
+                View Source
+              </Button>
+            )}
+            {item[CONFIG.fields.links.pdfUrl] && (
+              <Button type="link" href={item[CONFIG.fields.links.pdfUrl]} target="_blank">
+                PDF
+              </Button>
+            )}
           </Space>
         </Space>
       </Card>
 
       <Modal
-        title={
-          <Space>
-            <FileSearchOutlined />
-            <span>Paper Details</span>
-          </Space>
-        }
+        title={<Space><FileSearchOutlined />Paper Details</Space>}
         open={isModalOpen}
-        onCancel={handleCancel}
+        onCancel={() => setIsModalOpen(false)}
         footer={[
-          <Button key="close" onClick={handleCancel}>
+          <Button key="close" onClick={() => setIsModalOpen(false)}>
             Close
           </Button>
         ]}
         width={700}
       >
         <div style={{ padding: '20px 0' }}>
-          {renderDetailItem('ID', item.id)}
-          {renderDetailItem('Title', item.title)}
-          {renderDetailItem('Authors', item.authors)}
-          {renderDetailItem('Source', item.source)}
-          {renderDetailItem('Categories', item.categories)}
-          {renderDetailItem('Publication Date', new Date(item.publication_date).toLocaleDateString())}
-          {renderDetailItem('Created At', new Date(item.created_at).toLocaleString())}
-          {renderDetailItem('Is Bookmarked', item.is_bookmarked)}
-          {renderDetailItem('Bookmark ID', item.bookmark_id)}
-          {renderDetailItem('Active Bookmarks Count', item.active_bookmarks_count)}
-          {renderDetailItem('Paper Read', item.is_paper_read)}
-          
+          {renderDetailItem('Title', item[CONFIG.fields.title])}
+          {renderDetailItem('Authors', item[CONFIG.arrayFields.authors])}
+          {renderDetailItem('Categories', item[CONFIG.arrayFields.categories])}
+          {renderDetailItem('Publication Date', new Date(item[CONFIG.fields.date]).toLocaleDateString())}
           <Divider />
-          
           <div>
             <Text strong>Abstract:</Text>
             <Paragraph style={{ marginTop: 8 }}>
-              {item.abstract}
+              {item[CONFIG.fields.abstract]}
             </Paragraph>
           </div>
-
           <Divider />
-
           <Space>
-            {item.url && (
-              <Button type="primary" href={item.url} target="_blank" icon={<LinkOutlined />}>
+            {item[CONFIG.fields.links.url] && (
+              <Button 
+                type="primary" 
+                href={item[CONFIG.fields.links.url]} 
+                target="_blank" 
+                icon={<LinkOutlined />}
+              >
                 View Source
               </Button>
             )}
-            {item.pdf_url && (
-              <Button type="default" href={item.pdf_url} target="_blank" icon={<FilePdfOutlined />}>
+            {item[CONFIG.fields.links.pdfUrl] && (
+              <Button 
+                type="default" 
+                href={item[CONFIG.fields.links.pdfUrl]} 
+                target="_blank" 
+                icon={<FilePdfOutlined />}
+              >
                 View PDF
               </Button>
             )}
@@ -906,57 +703,125 @@ const ItemCard = React.memo (({
   );
 });
 
-const config = {
-  titleField: 'title',
-  abstractField: 'abstract',
-  dateField: 'publication_date',
-  arrayFields: {
-    authors: 'authors',
-    categories: 'categories'
-  },
-  linkFields: {
-    url: 'url',
-    pdfUrl: 'pdf_url'
-  }
-};
+const SkeletonUI = React.memo(() => (
+  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+    <Row gutter={[16, 16]}>
+      <Col span={12}>
+        <Card>
+          {/* Chart skeleton */}
+          <div style={{ height: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Skeleton.Avatar active size={400} shape="circle" />
+          </div>
+        </Card>
+      </Col>
+      <Col span={12}>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          {/* Statistics skeleton */}
+          <Card>
+            <Row gutter={[16, 16]}>
+              {[1, 2, 3].map(key => (
+                <Col span={8} key={key}>
+                  <Skeleton.Input active block style={{ width: '100%' }} />
+                  <Skeleton.Input active block size="small" style={{ width: '60%', marginTop: 8 }} />
+                </Col>
+              ))}
+            </Row>
+          </Card>
+          
+          {/* Filters skeleton */}
+          <Card>
+            <Skeleton.Input active block style={{ width: '30%', marginBottom: 16 }} />
+            {[1, 2, 3, 4].map(key => (
+              <div key={key} style={{ marginBottom: 16 }}>
+                <Skeleton.Input active block style={{ width: '20%', marginBottom: 8 }} />
+                <Skeleton.Input active block style={{ width: '100%' }} />
+              </div>
+            ))}
+          </Card>
+        </Space>
+      </Col>
+    </Row>
+  </Space>
+));
 
-export const generateAnalysis = (items, config) => {
-  const { abstractField = 'abstract', arrayFields = {} } = config;
+const InitialState = React.memo(() => (
+  <Card style={{ textAlign: 'center', padding: '40px' }}>
+    <Empty
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={
+        <Text type="secondary">
+          Enter a search term to begin exploring the research papers
+        </Text>
+      }
+    />
+  </Card>
+));
 
-  const analyses = {
-    'Content Analysis': items.map(item => {
-      const text = item[abstractField]?.toLowerCase() || '';
-      const length = text.length;
-      
-      return {
-        name: length < 500 ? 'Short' : length < 1000 ? 'Medium' : 'Long',
-        value: 1
-      };
-    }).reduce((acc, curr) => {
-      acc[curr.name] = (acc[curr.name] || 0) + curr.value;
-      return acc;
-    }, {}),
+const NoDataUI = React.memo(({ searchQuery, onReset }) => (
+  <Card style={{ textAlign: 'center', padding: '40px' }}>
+    <Empty
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={
+        <Text type="secondary">
+          {searchQuery ? `No results found for "${searchQuery}"` : 'No data available'}
+        </Text>
+      }
+    >
+      <Button type="primary" onClick={onReset} icon={<ReloadOutlined />}>
+        Reset Search
+      </Button>
+    </Empty>
+  </Card>
+));
 
-    'Team Size': items.map(item => {
-      const count = Array.isArray(item[arrayFields.authors]) 
-        ? item[arrayFields.authors].length 
-        : 0;
-      
-      return {
-        name: count <= 2 ? 'Small (1-2)' : count <= 4 ? 'Medium (3-4)' : 'Large (5+)',
-        value: 1
-      };
-    }).reduce((acc, curr) => {
-      acc[curr.name] = (acc[curr.name] || 0) + curr.value;
-      return acc;
-    }, {})
-  };
+export default React.memo(ResearchDashboard);
 
-  return Object.entries(analyses).reduce((acc, [key, value]) => {
-    acc[key] = Object.entries(value).map(([name, value]) => ({
-      name,
-      value
-    }));
-    return acc;
-  }, {});
-};
+// Add CSS styles
+const styles = `
+.research-dashboard {
+    padding: 24px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+
+.item-card {
+  transition: all 0.3s ease;
+}
+
+.item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+}
+
+#scrollableDiv {
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 #f0f0f0;
+}
+
+#scrollableDiv::-webkit-scrollbar {
+  width: 6px;
+}
+
+#scrollableDiv::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+#scrollableDiv::-webkit-scrollbar {
+ display: none !important;
+}
+
+#scrollableDiv {
+ -ms-overflow-style: none;  /* IE and Edge */
+ scrollbar-width: none;  /* Firefox */
+}
+
+/* Dark theme scrollbar background */
+.ant-card {
+ background: #1f1f1f;
+}
+
+#scrollableDiv::-webkit-scrollbar-thumb {
+  background-color: #d9d9d9;
+  border-radius: 3px;
+}
+`;
