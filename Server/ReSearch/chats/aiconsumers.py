@@ -150,7 +150,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self.user_channel = None
         self.user = None
-
+        
     async def connect(self):
         try:
             self.user = self.scope["user"]
@@ -201,6 +201,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             event: Event data from channel layer
         """
         try:
+            print("start clean Uo")
             user_id = str(self.user.id)
             if user_id in self.chatbot_instances:
                 # Clean up FAISS indices

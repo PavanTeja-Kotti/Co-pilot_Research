@@ -152,7 +152,7 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
             'is_paper_read'
             
         ]
-        read_only_fields = ['created_at', 'is_bookmarked', 'bookmark_id', 'active_bookmarks_count']
+        read_only_fields = ['created_at', 'is_bookmarked', 'bookmark_id', 'active_bookmarks_count','is_paper_read']
 
     def get_is_paper_read(self,obj):
         request = self.context.get('request')

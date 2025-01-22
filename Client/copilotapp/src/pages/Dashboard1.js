@@ -206,6 +206,18 @@ const ResearchDashboard = () => {
     }
   }, [analysisMode, processMainData]);
 
+
+  useEffect(() => {
+
+
+    async function fetchData() {
+    
+      await handleSearch("machine learning");
+
+    }
+
+    fetchData();
+  },[])
   const handleYearClick = useCallback((data) => {
     if (!data?.payload) return;
     
@@ -330,7 +342,7 @@ const ResearchDashboard = () => {
     <div className="research-dashboard">
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {/* Search Header */}
-        <Row gutter={[16, 16]} align="middle">
+        {/* <Row gutter={[16, 16]} align="middle">
           <Col flex="auto">
             <Search
               placeholder="Search by title, abstract, authors, or categories..."
@@ -353,7 +365,7 @@ const ResearchDashboard = () => {
               </Button>
             </Col>
           )}
-        </Row>
+        </Row> */}
 
         {/* Error Message */}
         {error && (

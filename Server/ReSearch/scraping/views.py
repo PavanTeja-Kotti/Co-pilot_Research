@@ -11,6 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import pandas as pd
+import asyncio
 from django.db import models
 from django.db.models import Q
 from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike,ReadPaper
@@ -260,6 +261,11 @@ def research_paper_list_withoutPage(request):
 
 
 
+async def process_recomndaion():
+    await asyncio.sleep(5)
+    print("Recommendation Processed")
+    pass
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list_withPage(request):
@@ -284,7 +290,9 @@ def research_paper_list_withPage(request):
         serializer = ResearchPaperSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
+           
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        asyncio.create_task(process_recomndaion())
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
