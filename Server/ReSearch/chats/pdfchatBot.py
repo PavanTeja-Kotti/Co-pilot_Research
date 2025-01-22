@@ -12,7 +12,14 @@ from groq import Groq
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
+from django.conf import settings
 
+def create_FissIndex_directory():
+        """Create upload directory if it doesn't exist"""
+        FissIndex = os.path.join(settings.BASE_DIR, 'FissIndex')
+        if not os.path.exists(FissIndex):
+            os.makedirs(FissIndex)
+        return FissIndex
 @dataclass
 class ChatHistory:
     question: str
@@ -229,8 +236,8 @@ class PDFContent:
 
 class PDFChatbot:
     def __init__(self, groq_api_key: str, index_path: str = 'faiss_index'):
-        TEXT_INDEX_PATH =  index_path+"text"
-        TABLE_INDEX_PATH = index_path + "table"
+        TEXT_INDEX_PATH = os.path.join(create_FissIndex_directory(), index_path + "_text")
+        TABLE_INDEX_PATH = os.path.join(create_FissIndex_directory(),index_path + "_table")
         self.text_vector_store = VectorStoreManager(TEXT_INDEX_PATH)
         self.table_vector_store = VectorStoreManager(TABLE_INDEX_PATH)
         self.groq_client = GroqClient(groq_api_key)
