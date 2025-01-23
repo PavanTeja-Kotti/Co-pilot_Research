@@ -287,7 +287,7 @@ class GroupChatConsumer(BaseChatConsumer):
             }))
 
     @database_sync_to_async
-    def processAIResponse(self, lastMessage, content, group_id):
+    def processAIResponse(self, lastMessage, content, group_id,attachment=None):
         
         bot=middleware.User.objects.get(email='bot@gmail.com')
         if not bot:
@@ -298,8 +298,17 @@ class GroupChatConsumer(BaseChatConsumer):
                 group_chat_id=group_id,
                 text_content=lastMessage,
                 content=content or {},
-                message_type=MessageType.TEXT
+                message_type=MessageType.MULTIPLE if attachment else  MessageType.TEXT
             )
+        if attachment:
+            attachment = MessageAttachment.objects.create(
+                file_path=attachment.get('path'),
+                file_name=attachment.get('name'),
+                file_size=attachment.get('size', 0),
+                file_type=attachment.get('type')
+            )
+            message.attachments.add(attachment)
+            message.save()
         message.save()
         active_members = message.group_chat.members.exclude(
                 id=bot.id
@@ -320,11 +329,11 @@ class GroupChatConsumer(BaseChatConsumer):
 
 
     async def handle_ai_response(self, lastMessage, message_data, group_id):
-        try:
-            print(message_data)
+        try: 
             chatbot = await self.get_or_create_chatbot(group_id)
             if not chatbot:
                 return
+            text_content = message_data['text_content'].lstrip('@bot').strip() 
             
             if message_data['attachments']:
                     file_path = message_data['attachments'][0]['file_path']
@@ -339,6 +348,7 @@ class GroupChatConsumer(BaseChatConsumer):
                                 lastMessage=summary)
                             if message:
                                 message_data = await self.get_message_data(message)
+                                print("calling one time")
                                 await self.channel_layer.group_send(
                                     self.chat_group,
                                     {
@@ -346,15 +356,25 @@ class GroupChatConsumer(BaseChatConsumer):
                                         'message': message_data
                                     }
                                 )
-                                
-            if message_data['text_content'].lstrip('@bot').strip():
-                # Process text message and get response
-                response = await asyncio.to_thread(chatbot.ask_question, message_data['text_content'].lstrip('@bot').strip())
+
+                    
+            if text_content and len(text_content)>0:
+                print("calling two time",text_content, len(text_content))
+                response,image,Size = await asyncio.to_thread(chatbot.ask_question, message_data['text_content'].lstrip('@bot').strip())
                 if response:
                     message = await self.processAIResponse(
                         group_id=group_id,
                         content={},
-                        lastMessage=response)
+                        lastMessage=response,
+                        attachment= {
+                                        "path": image,
+                                        "name": "AiChatBot.png",
+                                        "size": Size,
+                                        "type": "IMAGE",
+                                } if image and Size else None
+                        
+                        )
+                    
                     if message:
                         message_data = await self.get_message_data(message)
                         await self.channel_layer.group_send(

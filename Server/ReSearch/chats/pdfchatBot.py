@@ -9,11 +9,22 @@ import requests
 import pdfplumber
 import PyPDF2
 from groq import Groq
-from django.conf import settings
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
+import os
+import io
 
+import fitz  # PyMuPDF
+import open_clip
+import torch
+from torchvision import transforms
+from PIL import Image
+import numpy as np
+import faiss
+import base64
+import json
+from django.conf import settings
 
 def create_FissIndex_directory():
         """Create upload directory if it doesn't exist"""
@@ -21,7 +32,6 @@ def create_FissIndex_directory():
         if not os.path.exists(FissIndex):
             os.makedirs(FissIndex)
         return FissIndex
-
 
 @dataclass
 class ChatHistory:
@@ -112,6 +122,74 @@ class PDFProcessor:
             return tables
         except Exception as e:
             raise ValueError(f"Error extracting tables: {str(e)}")
+    
+    def extract_images_from_pdf(self):
+        """Extract images from a PDF."""
+        
+        if self.is_url:
+            temp_path = self._download_pdf()
+            pdf_path = temp_path
+        else:
+            pdf_path = self.pdf_source
+
+        pdf_document = fitz.open(pdf_path)
+        images = []
+        for page_num in range(len(pdf_document)):
+            page = pdf_document[page_num]
+            for img_index, img in enumerate(page.get_images(full=True)):
+                try:
+                    xref = img[0]
+                    base_image = pdf_document.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+                    images.append(image)
+                except Exception as e:
+                    print(f"Failed to process image {img_index} on page {page_num}: {e}")
+        return images
+    
+
+    def generate_image_embeddings(self,images, model, transform):
+        """Generate embeddings for a list of images."""
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        embeddings = []
+        for img in images:
+            img_tensor = transform(img).unsqueeze(0).to(device)
+            with torch.no_grad():
+                embedding = model.encode_image(img_tensor)
+            embedding = embedding / embedding.norm(dim=-1, keepdim=True)  # Normalize
+            embeddings.append(embedding.cpu().numpy())
+        return np.vstack(embeddings)
+    
+    def save_embeddings_to_faiss(self,image_embeddings, faiss_index_path):
+        """Append new embeddings to the Faiss index."""
+        dim = image_embeddings.shape[1]
+        if os.path.exists(faiss_index_path):
+            faiss_index = faiss.read_index(faiss_index_path)
+        else:
+            faiss_index = faiss.IndexFlatL2(dim)
+        faiss_index.add(image_embeddings)
+        faiss.write_index(faiss_index, faiss_index_path)
+    
+    def save_image_mapping(self,image_embeddings, images, image_mapping_path):
+        """Append new image mappings to the JSON file."""
+        with open(image_mapping_path, "r") as f:
+            image_mapping = json.load(f)
+
+        start_index = len(image_mapping)
+        for idx, embedding in enumerate(image_embeddings):
+            # Convert image to base64
+            buffered = io.BytesIO()
+            images[idx].save(buffered, format="PNG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            image_mapping[start_index + idx] = {
+                "base64": img_base64
+            }
+
+        with open(image_mapping_path, "w") as f:
+            json.dump(image_mapping, f)
+
+
+
 
     def process_table(self, tables: List[List[List[str]]]) -> List[Document]:
         """
@@ -124,11 +202,18 @@ class PDFProcessor:
             List[Document]: List of processed table documents.
         """
         table_documents = []
+        if not tables:  # Check if tables are empty
+            return table_documents
+
         for table in tables:
+            if not table or not isinstance(table, list):  # Validate table structure
+                continue
             for row in table:
                 row_content = " | ".join([str(cell) for cell in row])  # Convert row to a string
                 table_documents.append(Document(page_content=f"Table Row: {row_content}"))
+
         return table_documents
+
 
     def create_chunks(self, text: str, chunk_size: int = 500) -> List[str]:
         """Split text into chunks of specified size."""
@@ -143,12 +228,9 @@ class VectorStoreManager:
         self.vector_store = self._load_index()
 
     def _load_index(self) -> Optional[FAISS]:
-        """Load existing FAISS index if it exists, with validation."""
+        """Load existing FAISS index if it exists."""
         if os.path.exists(self.index_path):
-            try:
-                return FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
-            except Exception as e:
-                raise ValueError(f"Failed to load FAISS index securely: {e}")
+            return FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
         return None
 
     def save_index(self):
@@ -174,17 +256,51 @@ class VectorStoreManager:
 class GroqClient:
     def __init__(self, api_key: str):
         self.client = Groq(api_key=api_key)
+    
+
+    
+
+    
+    def explain_image(self,base64_image):
+     
+       
+        try:
+            chat_completion = self.client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "What's in this image?"},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    model="llama-3.2-90b-vision-preview",
+                )
+            return chat_completion.choices[0].message.content
+        except:
+            return "Invalid image url"
+                
+
 
     def summarize_text(self, text: str) -> str:
+    
+            
         """Summarize text using Groq API."""
         response = self.client.chat.completions.create(
             messages=[{
                 "role": "user",
                 "content": f"Summarize this text in less than 150 words: {text}"
             }],
-            model="llama-3.1-8b-instant",
+            model="llama3-8b-8192"
         )
         return response.choices[0].message.content
+        
 
     def answer_question(self, question: str, context: str, history_context: str) -> str:
         """Generate answer using Groq API."""
@@ -219,7 +335,7 @@ class GroqClient:
          
             """
             }],
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-70b-versatile",
         )
         return response.choices[0].message.content
 
@@ -243,17 +359,43 @@ class PDFChatbot:
 
     def process_pdf(self, pdf_source: str) -> str:
         try:
+            INDEX_PATH = "persistent_data/faiss_index"
+            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+
+            # Ensure the persistent storage directories exist
+            os.makedirs(INDEX_PATH, exist_ok=True)
+            if not os.path.exists(IMAGE_MAPPING_PATH):
+                with open(IMAGE_MAPPING_PATH, "w") as f:
+                    json.dump({}, f)
             processor = PDFProcessor(pdf_source)
             text = processor.extract_text()
             tables = processor.extract_tables()
             table_documents = processor.process_table(tables)
+            extracted_images = processor.extract_images_from_pdf()
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model, _, transform = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
+            model.eval()
+            model.to(device)
+            INDEX_PATH = "persistent_data/faiss_index"
+            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+
+
+       
+            image_embeddings = processor.generate_image_embeddings(extracted_images, model, transform)
+
+            processor.save_embeddings_to_faiss(image_embeddings, os.path.join(INDEX_PATH, "image_embeddings.index"))
+            processor.save_image_mapping(image_embeddings, extracted_images, IMAGE_MAPPING_PATH)
+
 
             text_chunks = processor.create_chunks(text)
             text_documents = [Document(page_content=chunk) for chunk in text_chunks]
 
-            # Index text and tables separately
+            # Index text documents
             self.text_vector_store.add_documents(text_documents)
-            self.table_vector_store.add_documents(table_documents)
+
+            # Only index tables if there are valid table documents
+            if table_documents:
+                self.table_vector_store.add_documents(table_documents)
 
             # Generate summary using Groq
             summary = self.groq_client.summarize_text(text)
@@ -270,6 +412,8 @@ class PDFChatbot:
         except Exception as e:
             raise ValueError(f"Error processing PDF: {str(e)}")
 
+
+
     def ask_question(self, question: str, k: int = 5) -> str:
         """
         Ask a question by fetching similar documents from both text and table indices.
@@ -281,6 +425,38 @@ class PDFChatbot:
         Returns:
             str: Answer to the question.
         """
+        keywords = {"diagram", "image", "picture", "pic", "photo"}
+        words = question.lower().split()
+        flag = any(word in keywords for word in words)
+
+        print(flag)
+
+        if(flag):
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model, _, transform = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
+            model.eval()
+            model.to(device) 
+
+            text_embedding = self.generate_text_embedding(question, model, open_clip.tokenize)
+            INDEX_PATH = "persistent_data/faiss_index"
+            faiss_index = self.load_embeddings_from_faiss(os.path.join(INDEX_PATH, "image_embeddings.index"))
+            D, I = faiss_index.search(np.array([text_embedding]), k=1)
+            best_match_index = I[0][0]
+            similarity = D[0][0]
+            print("Smilarity score",similarity)
+            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+            image_mapping = self.load_image_mapping(IMAGE_MAPPING_PATH)
+            best_match_base64 = image_mapping[str(best_match_index)]["base64"]
+            img_data = base64.b64decode(best_match_base64)
+            img_explanation = self.groq_client.explain_image(best_match_base64)
+            print("img explanaation",img_explanation)
+            image = Image.open(io.BytesIO(img_data))
+            imagePath=os.path.join(settings.BASE_DIR, 'uploads',f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_AiChatBot.PNG")
+            image.save(imagePath)
+            image_size_kb = os.path.getsize(imagePath) / 1024
+            return img_explanation,imagePath,image_size_kb
+
+
         text_docs = []
         table_docs = []
 
@@ -290,8 +466,9 @@ class PDFChatbot:
 
         if self.table_vector_store.vector_store:
             table_docs = self.table_vector_store.similarity_search(question, k=k)
-
-        # Combine the content of both sets of documents
+        
+       
+        
         combined_context = " ".join([doc.page_content for doc in text_docs + table_docs])
 
         if not combined_context:
@@ -304,7 +481,31 @@ class PDFChatbot:
         # Generate answer using Groq API
         answer = self.groq_client.answer_question(question, combined_context, history_context)
         self.chat_history.append(ChatHistory(question=question, answer=answer))
-        return answer
+        return answer,None,None
+    
+    def load_embeddings_from_faiss(self,faiss_index_path):
+        """Load the image embeddings from a Faiss index file."""
+        if os.path.exists(faiss_index_path):
+            return faiss.read_index(faiss_index_path)
+        return None
+    
+    def load_image_mapping(self,image_mapping_path):
+        """Load image mapping from JSON."""
+        with open(image_mapping_path, "r") as f:
+            return json.load(f)
+        
+
+    def generate_text_embedding(self,query, model, tokenizer):
+        """Generate an embedding for a text query."""
+        tokens = tokenizer([query])  # Tokenize text as a batch
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        tokens = tokens.to(device)
+        model = model.to(device)
+
+        with torch.no_grad():
+            embedding = model.encode_text(tokens)
+        embedding = embedding / embedding.norm(dim=-1, keepdim=True)  # Normalize
+        return embedding.squeeze(0).cpu().numpy()
 
     def get_pdf_content(self, pdf_id: Optional[str] = None) -> Optional[PDFContent]:
         """Get content of a specific PDF or the current PDF."""
@@ -333,7 +534,8 @@ def main():
        
     )
 
-    # Example usage
+   
+
     try:
         # Test basic conversation
         print("Testing basic conversation:")
@@ -342,21 +544,28 @@ def main():
 
         # Process a PDF
         print("\nProcessing PDF:")
-        # summary = chatbot.process_pdf("https://arxiv.org/pdf/1706.03762")
-        # print(f"PDF Summary:\n{summary}\n")
+        summary = chatbot.process_pdf("https://etc.usf.edu/lit2go/pdf/passage/394/aesops-fables-029-the-fox-and-the-crow.pdf")
+        
+        print(f"PDF Summary:\n{summary}\n")
 
 
         # Ask questions about the combined content
         print("Asking questions about the combined content:")
         questions = [
-            "how many sentence does WMT 2014 English-German dataset has?",
-            "what is the complexity per layer for layer type:Self-Attention ",
-            "what is the training for the parser Vinyals & Kaiser el al. (2014)"
+            
+            
+            "What is transformer",
+            # "Exaplain transformer architecture with image",
+            "crow doing",
+            "Explain tranformer with architecture image"
         ]
         for question in questions:
-            answer = chatbot.ask_question(question)
+            answer,img = chatbot.ask_question(question)
             print(f"Q: {question}")
             print(f"A: {answer}\n")
+        
+            
+
 
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -364,3 +573,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

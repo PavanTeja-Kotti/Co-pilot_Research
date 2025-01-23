@@ -89,6 +89,21 @@ CHANNEL_LAYERS = {
     }
 }
 
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / 'django_cache',
+    }
+}
+# Celery configuration
+CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"  # Redis as the message broker
+CELERY_ACCEPT_CONTENT = ['json']  # Content type for tasks
+CELERY_TASK_SERIALIZER = 'json'  # Serialization format
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL  # Use Redis for task results
+CELERY_TIMEZONE = 'UTC'  # Match the Django timezone
+
+
 INSTALLED_APPS = [
     'channels',
     'django.contrib.admin',

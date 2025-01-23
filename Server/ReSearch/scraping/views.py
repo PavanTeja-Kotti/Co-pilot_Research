@@ -11,6 +11,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import pandas as pd
+import asyncio
+from django.core.cache import cache
 from django.db import models
 from django.db.models import Q
 from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike,ReadPaper
@@ -235,29 +237,6 @@ class ResearchPaperPagination(LimitOffsetPagination):
 
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticatedOrReadOnly])
-def research_paper_list_withoutPage(request):
-    queryset = ResearchPaper.objects.all()
-    
-    # Apply filters efficiently
-    queryset = apply_filters(queryset, request)
-    
-    # Optimize by only fetching required fields and preloading related data
-    queryset = queryset.only(
-        'id', 'title', 'abstract', 'authors', 'source', 'url', 
-        'pdf_url', 'categories', 'publication_date', 'created_at'
-    ).prefetch_related('bookmarked_by')
-    
-    # Annotate for computed fields
-    queryset = queryset.annotate(
-        active_bookmarks_count=Count('bookmarked_by'),
-        is_bookmarked=Count('bookmarked_by', filter=Q(bookmarked_by=request.user))
-    )
-    
-    serializer = ResearchPaperSerializer(queryset, many=True, context={'request': request})
-    return Response(serializer.data)
-
 
 
 @api_view(['GET', 'POST'])
@@ -284,9 +263,44 @@ def research_paper_list_withPage(request):
         serializer = ResearchPaperSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
+           
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def research_paper_list_withoutPage(request):
+   cache_key = f"research_papers_{request.query_params}"
+   cached_data = cache.get(cache_key)
+   
+   if cached_data:
+       return Response(cached_data)
+   
+   # Track cache key
+   related_keys = cache.get("research_paper_cache_keys", set())
+   related_keys.add(cache_key)
+   cache.set("research_paper_cache_keys", related_keys)
+   
+   queryset = ResearchPaper.objects.all()
+   queryset = apply_filters(queryset, request)
+   
+   queryset = queryset.only(
+       'id', 'title', 'abstract', 'authors', 'source', 'url',
+       'pdf_url', 'categories', 'publication_date', 'created_at'
+   )
+   
+   # More efficient chunking using iterator()
+   chunk_size = 1000
+   all_data = []
+   
+   for chunk in queryset.iterator(chunk_size=chunk_size):
+       serializer = ResearchPaperSerializer([chunk], many=True)
+       all_data.extend(serializer.data)
+   
+   cache.set(cache_key, all_data, timeout=604800)
+   return Response(all_data)
 
 
 @api_view(['GET'])

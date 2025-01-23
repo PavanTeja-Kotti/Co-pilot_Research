@@ -50,6 +50,7 @@ class MessageType(Enum):
     AI = 'AI'
     IMAGE = 'IMAGE'
     FILE = 'FILE'
+    MULTIPLE = 'MULTIPLE'
 
 class MessageStatus(Enum):
     SENT = 'SENT'
@@ -150,7 +151,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         super().__init__(*args, **kwargs)
         self.user_channel = None
         self.user = None
-
+        
     async def connect(self):
         try:
             self.user = self.scope["user"]
@@ -201,6 +202,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             event: Event data from channel layer
         """
         try:
+            print("start clean Uo")
             user_id = str(self.user.id)
             if user_id in self.chatbot_instances:
                 # Clean up FAISS indices
@@ -423,18 +425,29 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     return
-
             # Handle regular text messages
             if user_message.strip():
                 # Get AI response using chatbot
-                ai_response = await asyncio.to_thread(chatbot.ask_question, user_message)
-                
+                ai_response,image,size= await asyncio.to_thread(chatbot.ask_question, user_message)
                 # Save and send AI response
-                ai_message = await self.save_message({
+                if image and size:
+                    ai_message = await self.save_message({
                     'text': ai_response,
-                    'message_type': MessageType.AI.value,
-                    'content': {}
+                    'message_type': MessageType.MULTIPLE.value,
+                    'content': {},
+                    'file':    {
+                                        "path": image,
+                                        "name": "AiChatBot.png",
+                                        "size": size,
+                                        "type": "IMAGE",
+                                }
                 }, session_id, is_ai=True)
+                else:
+                    ai_message = await self.save_message({
+                        'text': ai_response,
+                        'message_type': MessageType.AI.value,
+                        'content': {}
+                    }, session_id, is_ai=True)
                 
                 if ai_message:
                     # Update chat session with latest message
