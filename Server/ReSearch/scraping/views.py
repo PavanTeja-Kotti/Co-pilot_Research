@@ -237,6 +237,38 @@ class ResearchPaperPagination(LimitOffsetPagination):
 
 
 
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def research_paper_list_withPage(request):
+    if request.method == 'GET':
+        queryset = ResearchPaper.objects.all()
+        filtered_queryset = apply_filters(queryset, request)
+       
+        paginator = ResearchPaperPagination()
+        
+        
+        paginated_queryset = paginator.paginate_queryset(filtered_queryset, request)
+        
+        serializer = ResearchPaperSerializer(
+            paginated_queryset, 
+            many=True, 
+            context={'request': request}
+        )
+        
+        return paginator.get_paginated_response(serializer.data)
+    
+    elif request.method == 'POST':
+        serializer = ResearchPaperSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+           
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list_withoutPage(request):
@@ -269,37 +301,6 @@ def research_paper_list_withoutPage(request):
    
    cache.set(cache_key, all_data, timeout=604800)
    return Response(all_data)
-
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticatedOrReadOnly])
-def research_paper_list_withPage(request):
-    if request.method == 'GET':
-        queryset = ResearchPaper.objects.all()
-        filtered_queryset = apply_filters(queryset, request)
-       
-        paginator = ResearchPaperPagination()
-        
-        
-        paginated_queryset = paginator.paginate_queryset(filtered_queryset, request)
-        
-        serializer = ResearchPaperSerializer(
-            paginated_queryset, 
-            many=True, 
-            context={'request': request}
-        )
-        
-        return paginator.get_paginated_response(serializer.data)
-    
-    elif request.method == 'POST':
-        serializer = ResearchPaperSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-           
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 @api_view(['GET'])

@@ -18,7 +18,7 @@ if __name__ == "__main__":
         # Run Uvicorn, Celery Worker, and Celery Beat in parallel
         processes = [
             subprocess.Popen(["uvicorn", "ReSearch.asgi:application", "--reload"]),
-            subprocess.Popen(["celery", "-A", "ReSearch", "worker", "--loglevel=info"]),
+            # subprocess.Popen(["celery", "-A", "ReSearch", "worker", "--loglevel=info"]),
             # subprocess.Popen(["celery", "-A", "ReSearch", "beat", "--loglevel=info"]),
         ]
 

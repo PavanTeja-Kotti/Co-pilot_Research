@@ -50,6 +50,7 @@ class MessageType(Enum):
     AI = 'AI'
     IMAGE = 'IMAGE'
     FILE = 'FILE'
+    MULTIPLE = 'MULTIPLE'
 
 class MessageStatus(Enum):
     SENT = 'SENT'
@@ -424,18 +425,29 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     return
-
             # Handle regular text messages
             if user_message.strip():
                 # Get AI response using chatbot
-                ai_response = await asyncio.to_thread(chatbot.ask_question, user_message)
-                
+                ai_response,image,size= await asyncio.to_thread(chatbot.ask_question, user_message)
                 # Save and send AI response
-                ai_message = await self.save_message({
+                if image and size:
+                    ai_message = await self.save_message({
                     'text': ai_response,
-                    'message_type': MessageType.AI.value,
-                    'content': {}
+                    'message_type': MessageType.MULTIPLE.value,
+                    'content': {},
+                    'file':    {
+                                        "path": image,
+                                        "name": "AiChatBot.png",
+                                        "size": size,
+                                        "type": "IMAGE",
+                                }
                 }, session_id, is_ai=True)
+                else:
+                    ai_message = await self.save_message({
+                        'text': ai_response,
+                        'message_type': MessageType.AI.value,
+                        'content': {}
+                    }, session_id, is_ai=True)
                 
                 if ai_message:
                     # Update chat session with latest message
