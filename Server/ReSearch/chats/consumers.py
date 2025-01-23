@@ -359,8 +359,7 @@ class GroupChatConsumer(BaseChatConsumer):
 
                     
             if text_content and len(text_content)>0:
-                print("calling two time",text_content, len(text_content))
-                response,image,Size = await asyncio.to_thread(chatbot.ask_question, message_data['text_content'].lstrip('@bot').strip())
+                response,image,Size = await asyncio.to_thread(chatbot.ask_question, message_data['text_content'].lstrip('@bot').strip(),True)
                 if response:
                     message = await self.processAIResponse(
                         group_id=group_id,

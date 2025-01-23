@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import api from '../utils/api'
 import { DynamicIconRenderer } from './InterestPage';
+import InfiniteScroll from 'react-infinite-scroll-component';
 
 
 const { useToken } = theme;
@@ -18,76 +19,128 @@ const { useToken } = theme;
 const { Title, Text } = Typography;
 const { Option } = Select;
 
+const ITEMS_PER_PAGE = 4;
+
 const Dashboard = () => {
   
   const token = useToken();
   const [loading, setLoading] = useState(true);
+  const [paperLoading, setPaperLoading] = useState(false);
   const [data, setData] = useState({
     readingData: [],
-    bookmarks: [],
+    papers: [],
     recommendations: [],
     topicDistribution: [],
     statsData: []
   });
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [topicFilter, setTopicFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('recent');
+  const [totalCount, setTotalCount] = useState(0);
+  const [defaultPapers, setDefaultPapers] = useState('ResearchPaper');
 
-  // Mock data - same as original
-  const readingData = [
-    { month: 'Jan', papers: 12, avgTime: 2.5 },
-    { month: 'Feb', papers: 15, avgTime: 2.8 },
-    { month: 'Mar', papers: 18, avgTime: 2.3 },
-    { month: 'Apr', papers: 22, avgTime: 2.6 },
-    { month: 'May', papers: 25, avgTime: 2.4 },
-    { month: 'Jun', papers: 28, avgTime: 2.7 },
-    { month: 'Jul', papers: 24, avgTime: 2.5 },
-    { month: 'Aug', papers: 20, avgTime: 2.9 },
-    { month: 'Sep', papers: 26, avgTime: 2.4 },
-    { month: 'Oct', papers: 30, avgTime: 2.6 },
-    { month: 'Nov', papers: 32, avgTime: 2.3 },
-    { month: 'Dec', papers: 35, avgTime: 2.5 }
-  ];
-
-  const bookmarks = [
-    {
-      title: "PaLM 2: Feature-Rich Language Models Scale Well with Many Tasks and Contexts",
-      authors: "Aakanksha Chowdhery, et al.",
-      conference: "arXiv 2023",
-      tags: ["LLM", "Scaling", "ML"],
-      impact: 89.5,
-      trending: true,
-      citations: 1205,
-      relevance: 98
-    },
-    {
-      title: "Constitutional AI: A Framework for Machine Learning Ethics",
-      authors: "Askell, A., Brundage, M., Hadfield, G.",
-      conference: "NeurIPS 2023",
-      tags: ["AI Ethics", "ML", "Safety"],
-      impact: 76.8,
-      trending: true,
-      citations: 892,
-      relevance: 99
-    },
-    {
-      title: "Self-Instruct: Aligning Language Models with Self-Generated Instructions",
-      authors: "Wang, Y., et al.",
-      conference: "ACL 2023",
-      tags: ["NLP", "LLM", "Instruction Tuning"],
-      impact: 82.3,
-      trending: false,
-      citations: 645,
-      relevance: 94
-    },
-    {
-      title: "Scaling Laws for Neural Language Models: Empirical Trends and Future Predictions",
-      authors: "Brown, T., et al.",
-      conference: "ICLR 2023",
-      tags: ["ML", "Scaling", "Theory"],
-      impact: 91.2,
-      trending: true,
-      citations: 1567,
-      relevance: 97
+  const loadMorePapers = async () => {
+    if (paperLoading) return;
+    
+    setPaperLoading(true);
+    try {
+      const response = await api.scraping().dynamicPaper({
+        limit: ITEMS_PER_PAGE,
+        offset,
+        // search: topicFilter,
+        sort: sortBy,
+        Table:defaultPapers,
+        pagginated:true
+      });
+      const { results, count, next } = response.data;
+      setTotalCount(count);
+      setHasMore(!!next);
+      setData(prev => ({
+        ...prev,
+        papers: [...prev.papers, ...results]
+      }));
+      setOffset(prev => prev + ITEMS_PER_PAGE);
+    } catch (error) {
+      console.error('Error loading more papers:', error);
+    } finally {
+      setPaperLoading(false);
     }
-  ];
+  };
+
+  const resetPapers = () => {
+    setOffset(0);
+    setHasMore(true);
+    setData(prev => ({ ...prev, papers: [] }));
+  };
+
+  const handleTopicChange = (value) => {
+    setTopicFilter(value);
+    resetPapers();
+  };
+
+  const handleSortChange = (value) => {
+    setSortBy(value);
+    resetPapers();
+  };
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        const [readingResponse, recommendationsResponse, topicsResponse, statsResponse] = 
+          await Promise.all([
+            api.scraping().readingstats(),
+            await Promise.resolve({ data: recommendations }),
+            await Promise.resolve({ data: topicDistribution }),
+            api.scraping().statsdata()
+          ]);
+
+        setData(prev => ({
+          ...prev,
+          readingData: readingResponse.data,
+          recommendations: recommendationsResponse.data,
+          topicDistribution: topicsResponse.data,
+          statsData: statsResponse.data
+        }));
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
+  useEffect(() => {
+    const fetchBookmarks = async () => {
+      setPaperLoading(true);
+      try {
+        const bookmarksResponse = await api.scraping().dynamicPaper({
+          limit: ITEMS_PER_PAGE,
+          offset: 0,
+          search: topicFilter,
+          sort: sortBy,
+          Table: defaultPapers,
+          pagginated: 'True'
+        });
+        setData(prev => ({
+          ...prev,
+          papers: bookmarksResponse.data.results
+        }));
+        setTotalCount(bookmarksResponse.data.count);
+        setHasMore(!!bookmarksResponse.data.next);
+      } catch (error) {
+        console.error('Error fetching papers:', error);
+      } finally {
+        setPaperLoading(false);
+      }
+    };
+
+    fetchBookmarks();
+  }, [topicFilter, sortBy]);
+
+  
 
   const recommendations = [
     {
@@ -120,86 +173,12 @@ const Dashboard = () => {
   ];
 
 
-  const fetchReadingData = async () => {
-    try {
-      // Simulate API call for reading data
-     return (await api.scraping().readingstats()).data; // Replace with actual API call
-    } catch (error) {
-      console.error('Error fetching reading data:', error);
-      throw error;
-    }
-  };
-  
-  const fetchBookmarks = async () => {
-    try {
-      // Simulate API call for bookmarks
-      return (await api.scraping().getbookmarked()).data; // Replace with actual API call
-    } catch (error) {
-      console.error('Error fetching bookmarks:', error);
-      throw error;
-    }
-  };
-  
-  const fetchRecommendations = async () => {
-    try {
-      // Simulate API call for recommendations
-      await new Promise(resolve => setTimeout(resolve, 1800));
-      return recommendations; // Replace with actual API call
-    } catch (error) {
-      console.error('Error fetching recommendations:', error);
-      throw error;
-    }
-  };
-  
-  const fetchTopicDistribution = async () => {
-    try {
-      // Simulate API call for topic distribution
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      return topicDistribution; // Replace with actual API call
-    } catch (error) {
-      console.error('Error fetching topic distribution:', error);
-      throw error;
-    }
-  };
-  
-  const fetchStatsData = async () => {
-    try {
-      // Simulate API call for stats data
-      return (await api.scraping().statsdata()).data
-       // Replace with actual API call
-    } catch (error) {
-      console.error('Error fetching stats data:', error);
-      throw error;
-    }
-  };
-  
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Simulate API call delay
-        const [
-          readingDataResult,
-          bookmarksResult,
-          recommendationsResult,
-          topicDistributionResult,
-          statsDataResult
-        ] = await Promise.all([
-          fetchReadingData(),
-          fetchBookmarks(),
-          fetchRecommendations(),
-          fetchTopicDistribution(),
-          fetchStatsData()
-        ]);
-        console.log('Data fetched:', readingDataResult,bookmarksResult,recommendationsResult,topicDistributionResult,statsDataResult);
-        setData({
-         readingData: readingDataResult,
-        bookmarks:bookmarksResult,
-        recommendations:recommendationsResult,
-          topicDistribution:topicDistributionResult,
-          statsData:statsDataResult
-        });
+        
+        
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -545,6 +524,140 @@ const Dashboard = () => {
     </Col>
   );
 
+
+  const renderPaperslist = (data,type) => {
+    let papers = [];
+    console.log(data);
+    switch(type) {
+      case 'BookmarkedPaper':
+        papers = data?.map(item => ({
+          ...item.paper_details,
+          bookmarked_at: item.bookmarked_at
+        }));
+        break;
+      case 'ResearchPaper':
+        papers = data;
+        break;
+      case 'ReadPaper':
+        papers = data?.map(item => ({
+          ...item.paper_details,
+          read_at: item.read_at
+        }));
+        break;
+      default:
+        return null;
+    }
+
+    return papers?.map((paper, index) => {
+      const author = paper.authors?.join(',');
+      
+      return (
+        <Col xs={24} md={12} key={index}>
+          <div style={{ 
+            background: '#141414',
+            borderRadius: '8px',
+            padding: '16px',
+            border: '1px solid #303030',
+            height: '100%'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              marginBottom: '12px'
+            }}>
+              <div style={{ flex: 1 }}>
+                <Text style={{ 
+                  color: '#fff',
+                  fontSize: '16px',
+                  fontWeight: 500,
+                  display: 'block',
+                  marginBottom: '8px',
+                  maxLines: 2
+                }}>
+                  {paper.title?.length > 50 ? paper.title.substring(0, 50) + "..." : paper.title}
+                </Text>
+                <Text style={{ 
+                  color: 'rgba(255, 255, 255, 0.45)',
+                  display: 'block'
+                }}>
+                  {author?.length > 50 ? author.substring(0, 50) + "..." : author}
+                </Text>
+              </div>
+              {type === 'ResearchPaper' && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  marginLeft: '8px'
+                }}>
+                  <Badge 
+                    status="processing" 
+                    text={
+                      <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>
+                        Trending
+                      </Text>
+                    }
+                  />
+                </div>
+              )}
+            </div>
+            
+            <div style={{ 
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px',
+              marginBottom: '12px'
+            }}>
+              {paper.source && (
+                <Tag style={{
+                  background: 'rgba(24, 144, 255, 0.1)',
+                  borderColor: 'transparent',
+                  color: '#1890ff'
+                }}>
+                  {paper.source}
+                </Tag>
+              )}
+              {paper.categories?.map((tag, tagIndex) => (
+                <Tag 
+                  key={tagIndex}
+                  style={{
+                    background: 'rgba(0, 255, 255, 0.1)',
+                    borderColor: 'transparent',
+                    color: '#13c2c2'
+                  }}
+                >
+                  {tag}
+                </Tag>
+              ))}
+            </div>
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              color: 'rgba(255, 255, 255, 0.45)'
+            }}>
+              <Text style={{ color: 'inherit' }}>
+                {type === 'BookmarkedPaper' && 'Bookmarked: ' + new Date(paper.bookmarked_at).toLocaleDateString()}
+                {type === 'ReadPaper' && 'Read: ' + new Date(paper.read_at).toLocaleDateString()}
+                {type === 'ResearchPaper' && 'Published: ' + new Date(paper.publication_date).toLocaleDateString()}
+              </Text>
+              <Text style={{ 
+                color: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <StarOutlined />
+                {paper.citation_count || 0}
+              </Text>
+            </div>
+          </div>
+        </Col>
+      );
+    });
+  };
+
+
   const renderPapersGrid = () => (
     <Col xs={24} lg={16}>
       <div style={{ 
@@ -553,219 +666,59 @@ const Dashboard = () => {
         padding: '20px',
         border: '1px solid #303030'
       }}>
-        {loading ? (
-          <>
-            <div style={{ marginBottom: '20px' }}>
-              <Row justify="space-between" align="middle">
-                <Col>
-                  <Skeleton active paragraph={{ rows: 1 }} />
-                </Col>
-                <Col>
-                  <Space>
-                    <Skeleton.Button active />
-                    <Skeleton.Button active />
-                  </Space>
-                </Col>
-              </Row>
-            </div>
+        <div style={{ marginBottom: '20px' }}>
+          <Row justify="space-between" align="middle">
+            <Col>
+              <Title level={5} style={{ color: '#fff', margin: 0 }}>Recent Papers</Title>
+              <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>Your latest research papers</Text>
+            </Col>
+            <Col>
+              <Space>
+                <Select 
+                  value={topicFilter} 
+                  onChange={handleTopicChange}
+                  style={{ width: 120 }}
+                  dropdownStyle={{ background: '#1f1f1f', borderColor: '#303030' }}
+                >
+                  <Option value="all">All Topics</Option>
+                  <Option value="llm">LLM</Option>
+                  <Option value="ethics">AI Ethics</Option>
+                  <Option value="vision">Vision</Option>
+                </Select>
+                <Select 
+                  value={sortBy}
+                  onChange={handleSortChange}
+                  style={{ width: 120 }}
+                  dropdownStyle={{ background: '#1f1f1f', borderColor: '#303030' }}
+                >
+                  <Option value="recent">Most Recent</Option>
+                  <Option value="cited">Most Cited</Option>
+                  <Option value="trending">Trending</Option>
+                </Select>
+              </Space>
+            </Col>
+          </Row>
+        </div>
 
+        <div id="scrollableDiv" style={{ maxHeight: '420px', overflow: 'auto' }}>
+          <InfiniteScroll
+            dataLength={data.papers.length}
+            next={loadMorePapers}
+            hasMore={hasMore}
+            loader={
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <Skeleton active paragraph={{ rows: 1 }} />
+              </div>
+            }
+            scrollableTarget="scrollableDiv"
+          >
             <Row gutter={[16, 16]}>
-              {[1, 2, 3, 4].map((i) => (
-                <Col xs={24} md={12} key={i}>
-                  <div style={{ 
-                    background: '#141414',
-                    borderRadius: '8px',
-                    padding: '16px',
-                    border: '1px solid #303030'
-                  }}>
-                    <Skeleton active paragraph={{ rows: 2 }} />
-                    <Space>
-                      <Skeleton.Button active size="small" />
-                      <Skeleton.Button active size="small" />
-                      <Skeleton.Button active size="small" />
-                    </Space>
-                  </div>
-                </Col>
-              ))}
+              {
+                renderPaperslist(data.papers,defaultPapers)
+              }
             </Row>
-          </>
-        ) : (
-          <>
-            <div style={{ marginBottom: '20px' }}>
-              <Row justify="space-between" align="middle">
-                <Col>
-                  <Title level={5} style={{ color: '#fff', margin: 0 }}>Recent Papers</Title>
-                  <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>Your latest research papers</Text>
-                </Col>
-                <Col>
-                  <Space>
-                    <Select 
-                      defaultValue="all" 
-                      style={{ width: 120 }}
-                      dropdownStyle={{ 
-                        background: '#1f1f1f', 
-                        borderColor: '#303030'
-                      }}
-                    >
-                      <Option value="all">All Topics</Option>
-                      <Option value="llm">LLM</Option>
-                      <Option value="ethics">AI Ethics</Option>
-                      <Option value="vision">Vision</Option>
-                    </Select>
-                    <Select 
-                      defaultValue="recent" 
-                      style={{ width: 120 }}
-                      dropdownStyle={{ 
-                        background: '#1f1f1f', 
-                        borderColor: '#303030'
-                      }}
-                    >
-                      <Option value="recent">Most Recent</Option>
-                      <Option value="cited">Most Cited</Option>
-                      <Option value="trending">Trending</Option>
-                    </Select>
-                  </Space>
-                </Col>
-              </Row>
-            </div>
-
-            <Row  className="custom-scroll"  gutter={[16, 16]} style={{maxHeight: '420px', overflowY: 'auto'}}>
-            <style>
-          {`
-            .custom-scroll::-webkit-scrollbar {
-              width: 1px;
-              background-color: transparent;
-            }
-            .custom-scroll::-webkit-scrollbar-thumb {
-              background-color: ${token.colorTextQuaternary};
-              border-radius: 20px;
-            }
-            .custom-scroll::-webkit-scrollbar-track {
-              background-color: ${token.colorBgContainer};
-            }
-            .custom-scroll:hover::-webkit-scrollbar-thumb {
-              background-color: ${token.colorTextTertiary};
-            }
-            .custom-scroll {
-              
-              scrollbar-width: thin;
-              scrollbar-color: ${token.colorTextQuaternary} transparent;
-            }
-            .custom-scroll:hover {
-              scrollbar-color: ${token.colorTextTertiary} transparent;
-            }
-            .custom-scroll::-webkit-scrollbar-thumb {
-              transition: background-color 0.2s;
-            }
-          `}
-        </style>
-
-              {data.bookmarks.map((paper, index) => {
-                var author=paper.paper_details.authors.join()
-            
-                return <Col xs={24} md={12} key={index}>
-                  <div style={{ 
-                    background: '#141414',
-                    borderRadius: '8px',
-                    padding: '16px',
-                    border: '1px solid #303030',
-                    height: '100%'
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between',
-                      marginBottom: '12px'
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <Text style={{ 
-                          color: '#fff',
-                          fontSize: '16px',
-                          fontWeight: 500,
-                          display: 'block',
-                          marginBottom: '8px',
-                          maxLines:2
-                        }}>
-                          {paper.paper_details?.title.length>50?paper.paper_details.title.substring(0,50)+"...":paper.paper_details.title}
-                        </Text>
-                        <Text style={{ 
-                          color: 'rgba(255, 255, 255, 0.45)',
-                          display: 'block'
-                        }}>
-                          {
-                            author.length>50?author.substring(0,50)+"...":author
-                          }
-                        </Text>
-                      </div>
-                      {true && (
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center',
-                          marginLeft: '8px'
-                        }}>
-                          <Badge 
-                            status="processing" 
-                            text={
-                              <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>
-                                Trending
-                              </Text>
-                            }
-                          />
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div style={{ 
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                      marginBottom: '12px'
-                    }}>
-                      <Tag style={{
-                        background: 'rgba(24, 144, 255, 0.1)',
-                        borderColor: 'transparent',
-                        color: '#1890ff'
-                      }}>
-                        {paper.paper_details?.source||""}
-                      </Tag>
-                      {paper.paper_details.categories.map((tag, tagIndex) => (
-                        <Tag 
-                          key={tagIndex}
-                          style={{
-                            background: 'rgba(0, 255, 255, 0.1)',
-                            borderColor: 'transparent',
-                            color: '#13c2c2'
-                          }}
-                        >
-                          {tag}
-                        </Tag>
-                      ))}
-                    </div>
-
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      color: 'rgba(255, 255, 255, 0.45)'
-                    }}>
-                      <Text style={{ color: 'inherit' }}>
-                        Impact: {paper.paper_details?.impact}
-                      </Text>
-                      <Text style={{ 
-                        color: 'inherit',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}>
-                        <StarOutlined />
-                        {paper.paper_details?.citations}
-                      </Text>
-                    </div>
-                  </div>
-                </Col>
-})}
-            </Row>
-          </>
-        )}
+          </InfiniteScroll>
+        </div>
       </div>
     </Col>
   );

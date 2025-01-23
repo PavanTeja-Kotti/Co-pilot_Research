@@ -260,6 +260,19 @@ class ScrapingService {
         )
     }
 
+    async dynamicPaper(filters={}){
+        console.log(filters)
+        const queryParams = new URLSearchParams();
+        Object.keys(filters).forEach(key => {
+            if (filters[key]) {
+                queryParams.append(key, filters[key]);
+            }
+        });
+        return this.baseService.request(
+            `${this.endpoint}/papers/dynamic/?${queryParams.toString()}`
+        )
+    }
+
     async readingstats(){
         return this.baseService.request(
             `${this.endpoint}/papers/readingstats/`

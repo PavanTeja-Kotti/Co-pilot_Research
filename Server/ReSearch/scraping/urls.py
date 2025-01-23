@@ -6,6 +6,7 @@ app_name = 'research_papers'
 urlpatterns = [
     path('papers/', views.research_paper_list_withPage),
     path('papers/withoutpage/', views.research_paper_list_withoutPage),
+    path('papers/dynamic/', views.dynamic_paper_list),
     path('papers/<int:pk>/', views.research_paper_detail),
     path('papers/bookmarked/', views.bookmarked_papers),
     path('papers/<str:pk>/bookmark/', views.toggle_bookmark),
