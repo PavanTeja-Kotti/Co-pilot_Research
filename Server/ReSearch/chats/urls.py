@@ -9,6 +9,7 @@ urlpatterns = [
     path('chats/', views.chat_list, name='chat-list'),
     path('chats/create/', views.create_chat, name='chat-create'),
     path('chats/<int:chat_id>/', views.chat_detail, name='chat-detail'),
+    path('chat-notes/', views.add_chat_notes, name='add_chat_notes'),
     
     # Group Chat URLs
     path('groups/', views.group_list, name='group-list'),

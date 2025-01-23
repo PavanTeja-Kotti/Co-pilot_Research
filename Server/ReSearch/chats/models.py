@@ -250,3 +250,30 @@ class MessageReceipt(models.Model):
             if not self.delivered_at:
                 self.delivered_at = self.read_at
             self.save(update_fields=['read_at', 'delivered_at'])
+
+class UserChatNote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete= models.SET_NULL,
+        null=True,
+        related_name='user_chat_notes'
+    )
+    initiated_at = models.DateTimeField(auto_now_add=True)
+    title = models.CharField(max_length=255, blank=False, null=False)
+    notes = models.TextField() 
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-initiated_at']
+
+    def __str__(self):
+        user_email = self.user.email if self.user else 'Deleted User'
+        return f"{user_email} - {self.title}"
+    
+    def soft_delete(self):
+        self.is_active = False
+        self.save()
+
+    def hard_delete(self):
+        super().delete()

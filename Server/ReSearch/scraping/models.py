@@ -100,6 +100,7 @@ class BookmarkedPaper(models.Model):
     def soft_delete(self):
         self.is_active = False
         self.save()
+        
     def hard_delete(self):
         super().delete()
 
