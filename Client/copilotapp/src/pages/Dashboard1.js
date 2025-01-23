@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Sector } from 'recha
 import { ArrowLeftOutlined, TeamOutlined, BookOutlined, FileTextOutlined, FilterOutlined, RiseOutlined, ReloadOutlined, EyeOutlined, FileSearchOutlined, LinkOutlined, FilePdfOutlined } from '@ant-design/icons';
 import { debounce } from 'lodash';
 import InfiniteScroll from 'react-infinite-scroll-component';
-import api from "../utils/api";
+
 import { useAuth } from '../utils/auth';
 
 const { Text, Paragraph } = Typography;
@@ -103,21 +103,12 @@ const RenderActiveShape = React.memo(({ cx, cy, innerRadius, outerRadius, startA
 
 // Main Component
 const ResearchDashboard = () => {
-  const { state, dispatch } = useAuth();
+  const { state, dispatch ,fetchDashboardData} = useAuth();
   
-
   useEffect(() => {
     const fetchInitialData = async () => {
       if (!state.searchCache) {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        try {
-          const response = await api.scraping().getPapaerWithoutPagination({ search: "m" });
-          dispatch({ type: 'INITIALIZE_DATA', payload: response.data });
-        } catch (err) {
-          dispatch({ type: 'SET_ERROR', payload: 'Failed to load data' });
-        } finally {
-          dispatch({ type: 'SET_LOADING', payload: false });
-        }
+        await fetchDashboardData();
       }
     };
     fetchInitialData();

@@ -89,6 +89,13 @@ CHANNEL_LAYERS = {
     }
 }
 
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / 'django_cache',
+    }
+}
 # Celery configuration
 CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"  # Redis as the message broker
 CELERY_ACCEPT_CONTENT = ['json']  # Content type for tasks

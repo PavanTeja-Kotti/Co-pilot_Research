@@ -160,6 +160,23 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
 
+  const fetchDashboardData = async (query) => {
+
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response =await api.scraping().getPapaerWithoutPagination(query);
+      if (response.success) {
+        dispatch({ type: 'INITIALIZE_DATA', payload: response.data });
+      } else {
+        dispatch({ type: 'SET_ERROR', payload: response.message });
+      }
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error.message });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    } 
+  };
+
   const getCachedFile = (filePath) => {
     return fileCache.get(filePath);
   };
@@ -416,7 +433,7 @@ export const AuthProvider = ({ children }) => {
         uploadFile,
         getCachedFile,
         clearFileCache,
-        state, dispatch
+        state, dispatch,fetchDashboardData
       }}
     >
       {children}
