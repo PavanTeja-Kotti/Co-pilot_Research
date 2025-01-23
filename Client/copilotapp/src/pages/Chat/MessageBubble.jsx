@@ -788,8 +788,8 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
       const getGridLayout = (count) => {
         if (count === 1) return { columns: 1, width: '240px' };
         if (count === 2) return { columns: 2, width: '480px' };
-        if (count === 3) return { columns: 2, width: '480px' }; // 2 in first row, 1 in second
-        return { columns: 2, width: '480px' }; // 2x2 grid for 4 or more
+        if (count === 3) return { columns: 2, width: '480px' }; 
+        return { columns: 2, width: '480px' }; 
       };
   
       const { columns, width } = getGridLayout(attachments.length);
@@ -853,8 +853,8 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
       <Text style={{
         display: 'inline-block',
         padding: '10px 12px',
-        backgroundColor: isOwnMessage ? '#1677ff' : '#ffffff',
-        color: isOwnMessage ? '#ffffff' : '#000000',
+        backgroundColor: isOwnMessage ? '#1677ff' : '#454746',
+        color: isOwnMessage ? '#ffffff' : '#ffffff',
         borderRadius: 16,
         fontSize: 14,
         wordBreak: 'break-word'
