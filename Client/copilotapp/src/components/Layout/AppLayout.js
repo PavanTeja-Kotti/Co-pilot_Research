@@ -55,7 +55,9 @@ const AppLayout = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        
+        backdropFilter: 'blur(20px)',
     };
 
     const logoStyle = {
