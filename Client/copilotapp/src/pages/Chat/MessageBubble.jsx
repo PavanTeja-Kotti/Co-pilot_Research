@@ -853,8 +853,8 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
       <Text style={{
         display: 'inline-block',
         padding: '10px 12px',
-        backgroundColor: isOwnMessage ? '#1677ff' : '#ffffff',
-        color: isOwnMessage ? '#ffffff' : '#000000',
+        backgroundColor: isOwnMessage ? '#1677ff' : '#1A1B1A',
+        color: isOwnMessage ? '#ffffff' : '#ffffff',
         borderRadius: 16,
         fontSize: 14,
         wordBreak: 'break-word'
