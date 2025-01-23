@@ -1,10 +1,18 @@
-import { Col, Row, Button, Modal, List, theme, Input, Typography, Space, Tooltip, Collapse } from "antd";
-import React, { useState } from "react";
+import { Col, Row, Button, Modal, List, theme, Input, Typography, Space, Tooltip, Collapse, Divider } from "antd";
+import React, { useState, useRef } from "react";
 import { UploadOutlined, DeleteOutlined, EditOutlined, SaveOutlined, PlusOutlined, BoldOutlined, ItalicOutlined, UnderlineOutlined, OrderedListOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import AIChat from "./Chat/AIChat";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Bold from "@tiptap/extension-bold";
+import Italic from "@tiptap/extension-italic";
+import BulletList from "@tiptap/extension-bullet-list";
+import OrderedList from "@tiptap/extension-ordered-list";
+import ListItem from "@tiptap/extension-list-item";
+// import Underline from "./extensions/Underline"; 
+
 
 const { useToken } = theme;
-const { Panel } = Collapse;
 const { TextArea } = Input;
 
 const PDFWindow = () => {
@@ -112,182 +120,131 @@ const PDFWindow = () => {
 };
 
 const NoteTaking = () => {
-    const [notes, setNotes] = useState([]);
-    const [currentNote, setCurrentNote] = useState(null);
-    const [editorContent, setEditorContent] = useState("");
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newNoteTitle, setNewNoteTitle] = useState("");
-
-    // Add a new note
-    const handleAddNote = () => {
-        if (newNoteTitle.trim()) {
-            const newNote = { title: newNoteTitle, content: "" };
-            setNotes([...notes, newNote]);
-            setNewNoteTitle("");
-            setIsModalOpen(false);
-        }
+    const [savedNote, setSavedNote] = useState("");
+  
+    const editor = useEditor({
+      extensions: [
+        StarterKit,
+        Bold,
+        Italic,
+        // Underline, // Custom underline extension
+        BulletList,
+        OrderedList,
+        ListItem,
+      ],
+      content: "",
+      editorProps: {
+        attributes: {
+          class:
+            "editor-content focus:outline-none bg-gray-900 text-white p-4 rounded-md",
+          style: "min-height: 200px;",
+        },
+      },
+    });
+  
+    const handleSave = () => {
+      if (editor) {
+        setSavedNote(editor.getHTML());
+      }
     };
-
-    // Select a note to edit
-    const handleSelectNote = (index) => {
-        setCurrentNote(index);
-        setEditorContent(notes[index].content);
-    };
-
-    // Save the current note's content
-    const handleSaveContent = () => {
-        if (currentNote !== null) {
-            const updatedNotes = [...notes];
-            updatedNotes[currentNote].content = editorContent;
-            setNotes(updatedNotes);
-        }
-    };
-
-    // Text formatting handlers
-    const applyFormatting = (tag) => {
-        const selection = window.getSelection();
-        const selectedText = selection.toString();
-        if (!selectedText) return;
-
-        const formattedText = {
-            bold: `**${selectedText}**`,
-            italic: `_${selectedText}_`,
-            underline: `<u>${selectedText}</u>`,
-            heading: `### ${selectedText}`,
-        }[tag];
-
-        const updatedContent = editorContent.replace(selectedText, formattedText);
-        setEditorContent(updatedContent);
-    };
-
+  
+    if (!editor) {
+      return null;
+    }
+  
     return (
-        <div style={{ padding: "10px", height: "100%" }}>
-            <Typography.Title level={4} style={{ color: "white", marginBottom: "10px" }}>
-                Notes
-            </Typography.Title>
-
-            {/* Add Note Button */}
-            <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setIsModalOpen(true)}
-                style={{ marginBottom: "10px" }}
-            >
-                + Add Note
-            </Button>
-
-            {/* Notes List Dropdown */}
-            <Collapse accordion>
-                {notes.map((note, index) => (
-                    <Panel
-                        header={note.title}
-                        key={index}
-                        onClick={() => handleSelectNote(index)}
-                    >
-                        <Typography.Text>{note.content || "No content yet."}</Typography.Text>
-                    </Panel>
-                ))}
-            </Collapse>
-
-            {/* Rich Text Editor */}
-            <div style={{ marginTop: "20px", background: "#333", padding: "10px", borderRadius: "5px" }}>
-                <Typography.Text style={{ color: "white", display: "block", marginBottom: "10px" }}>
-                    Editing: {currentNote !== null ? notes[currentNote].title : "Select a note to edit"}
-                </Typography.Text>
-
-                {/* Formatting Buttons */}
-                <Space style={{ marginBottom: "10px" }}>
-                    <Tooltip title="Bold">
-                        <Button
-                            shape="circle"
-                            icon={<BoldOutlined />}
-                            onClick={() => applyFormatting("bold")}
-                        />
-                    </Tooltip>
-                    <Tooltip title="Italic">
-                        <Button
-                            shape="circle"
-                            icon={<ItalicOutlined />}
-                            onClick={() => applyFormatting("italic")}
-                        />
-                    </Tooltip>
-                    <Tooltip title="Underline">
-                        <Button
-                            shape="circle"
-                            icon={<UnderlineOutlined />}
-                            onClick={() => applyFormatting("underline")}
-                        />
-                    </Tooltip>
-                    <Tooltip title="Heading">
-                        <Button
-                            shape="circle"
-                            icon={<OrderedListOutlined />}
-                            onClick={() => applyFormatting("heading")}
-                        />
-                    </Tooltip>
-                </Space>
-
-                {/* Text Area */}
-                <TextArea
-                    rows={8}
-                    value={editorContent}
-                    onChange={(e) => setEditorContent(e.target.value)}
-                    placeholder="Type your note here..."
-                    style={{
-                        background: "#444",
-                        color: "white",
-                        borderRadius: "5px",
-                        border: "1px solid #555",
-                    }}
-                />
-
-                <Button
-                    type="primary"
-                    onClick={handleSaveContent}
-                    style={{ marginTop: "10px" }}
-                >
-                    Save Note
-                </Button>
-            </div>
-
-            {/* Add Note Modal */}
-            {isModalOpen && (
-                <div
-                    style={{
-                        position: "fixed",
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        background: "#333",
-                        padding: "20px",
-                        borderRadius: "10px",
-                        zIndex: 1000,
-                        boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
-                    }}
-                >
-                    <Typography.Title level={5} style={{ color: "white" }}>
-                        Add Note
-                    </Typography.Title>
-                    <Input
-                        placeholder="Enter note title"
-                        value={newNoteTitle}
-                        onChange={(e) => setNewNoteTitle(e.target.value)}
-                        style={{ marginBottom: "10px" }}
-                    />
-                    <Button type="primary" onClick={handleAddNote}>
-                        Add
-                    </Button>
-                    <Button
-                        onClick={() => setIsModalOpen(false)}
-                        style={{ marginLeft: "10px" }}
-                    >
-                        Cancel
-                    </Button>
-                </div>
-            )}
+      <div style={{ padding: "20px", maxWidth: "800px", margin: "auto" }}>
+        <Typography.Title level={4} style={{ color: "#fff" }}>
+          New Note
+        </Typography.Title>
+  
+        {/* Toolbar */}
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            marginBottom: "10px",
+            backgroundColor: "#1e1e1e",
+            padding: "10px",
+            borderRadius: "8px",
+          }}
+        >
+          <Button
+            icon={<BoldOutlined />}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            type={editor.isActive("bold") ? "primary" : "default"}
+          >
+            Bold
+          </Button>
+          <Button
+            icon={<ItalicOutlined />}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            type={editor.isActive("italic") ? "primary" : "default"}
+          >
+            Italic
+          </Button>
+          <Button
+            icon={<UnderlineOutlined />}
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            type={editor.isActive("underline") ? "primary" : "default"}
+          >
+            Underline
+          </Button>
+          <Button
+            icon={<UnorderedListOutlined />}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            type={editor.isActive("bulletList") ? "primary" : "default"}
+          >
+            Bullet List
+          </Button>
+          <Button
+            icon={<OrderedListOutlined />}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            type={editor.isActive("orderedList") ? "primary" : "default"}
+          >
+            Ordered List
+          </Button>
         </div>
+  
+        {/* Editor */}
+        <div
+          style={{
+            border: "1px solid #555",
+            borderRadius: "8px",
+            background: "#1e1e1e",
+            padding: "10px",
+          }}
+        >
+          <EditorContent editor={editor} />
+        </div>
+  
+        {/* Save Button */}
+        <Button
+          type="primary"
+          icon={<SaveOutlined />}
+          onClick={handleSave}
+          style={{ marginTop: "20px" }}
+        >
+          Save
+        </Button>
+  
+        {/* Saved Note */}
+        <Typography.Title level={5} style={{ color: "#fff", marginTop: "20px" }}>
+          Saved Note
+        </Typography.Title>
+        <div
+          dangerouslySetInnerHTML={{ __html: savedNote }}
+          style={{
+            padding: "10px",
+            border: "1px solid #555",
+            borderRadius: "8px",
+            background: "#1e1e1e",
+            color: "#fff",
+          }}
+        ></div>
+      </div>
     );
-};
+  };
 
 const AiAssistant = () => {
 
