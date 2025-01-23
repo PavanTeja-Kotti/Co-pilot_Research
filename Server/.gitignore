@@ -7,6 +7,7 @@ media
 uploads
 FissIndex
 django_cache
+persistent_data
 
 
 
