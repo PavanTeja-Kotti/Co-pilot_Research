@@ -245,6 +245,12 @@ class ScrapingService {
             `${this.endpoint}/papers/statsdata/`
         )
     }
+
+    async getresearchfocus(){
+        return this.baseService.request(
+            `${this.endpoint}/papers/research_focus/`
+        )
+    }
     
 
     async toggleRead(paperId) {

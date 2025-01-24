@@ -11,6 +11,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
 import api from '../../utils/api';
 import ChatUiButton from '../../pages/ChatUiButton';
+import Logo from '../../asset/HeaderLogo';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -211,14 +212,8 @@ const AppLayout = () => {
         <Layout style={{ minHeight: '100vh', background: token.colorBgContainer }}>
             <Header style={headerStyle}>
                 <Link to="/" style={logoStyle}>
-                    <Avatar 
-                        size={40} 
-                        src="/logo.png"
-                        style={{ 
-                            border: `2px solid ${token.colorPrimary}`,
-                            padding: 2
-                        }} 
-                    />
+                    <Logo></Logo>
+                   
                     <Title 
                         level={4} 
                         style={{ 
@@ -227,7 +222,7 @@ const AppLayout = () => {
                             fontWeight: 600
                         }}
                     >
-                        Tech Titans
+                        {/* Tech Titans */}
                     </Title>
                 </Link>
 
