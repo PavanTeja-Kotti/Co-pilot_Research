@@ -9,7 +9,7 @@ const Logo = ({ className = '' }) => {
    display: 'flex',
    alignItems: 'left',
    backgroundColor: 'inherit', // Dark background
-   padding: '0.5rem'
+  //  padding: '0.5rem'
  };
 
  return (
