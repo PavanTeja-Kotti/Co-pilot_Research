@@ -29,6 +29,7 @@ const AppHeader = () => {
         justifyContent: 'space-between',
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         backdropFilter: 'blur(20px)',
+        marginLeft: '-20px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
