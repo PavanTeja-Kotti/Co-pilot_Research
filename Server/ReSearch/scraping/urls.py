@@ -21,5 +21,5 @@ urlpatterns = [
     path('categories/<int:pk>/', views.category_detail),
     path('categories/<int:pk>/like/', views.toggle_category_like),
     path('categories_like_list/', views.category_like_list),
-    path('recomendation_paper_list/', views.recomendation_paper),
+    path('recomendation_paper_list/', views.recommendation_paper),
 ]
