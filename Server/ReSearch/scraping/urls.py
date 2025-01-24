@@ -4,6 +4,7 @@ from uuid import UUID
 app_name = 'research_papers'
 
 urlpatterns = [
+    path('papers/research_focus/', views.research_focus),
     path('papers/', views.research_paper_list_withPage),
     path('papers/withoutpage/', views.research_paper_list_withoutPage),
     path('papers/dynamic/', views.dynamic_paper_list),

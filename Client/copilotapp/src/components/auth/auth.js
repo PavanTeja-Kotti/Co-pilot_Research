@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
 import { pad } from 'lodash';
+import Logo from '../../asset/HeaderLogo';
 
 const { Title, Text } = Typography;
 const { useToken } = theme;
@@ -14,24 +15,27 @@ const { Header } = Layout;
 
 
 const AppHeader = () => {
+  const { token } = useToken();
   return (
     <Header 
       style={{
-        background: 'rgba(255, 255, 255, 0.03)',
-        backdropFilter: 'blur(20px)',
+        background: token.colorBgElevated,
+        borderBottom: `1px solid ${token.colorBorder}`,
         position: 'fixed',
+        zIndex: 999,
         width: '100%',
-        zIndex: 1,
-        padding: '0 24px',
         display: 'flex',
         alignItems: 'center',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+        justifyContent: 'space-between',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        backdropFilter: 'blur(20px)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <DatabaseOutlined style={{ fontSize: '24px', color: '#60a5fa' }} />
+        {/* <DatabaseOutlined style={{ fontSize: '24px', color: '#60a5fa' }} /> */}
+        <Logo/>
         <Title level={3} style={{ margin: 0, color: 'rgba(255, 255, 255, 0.95)' }}>
-          Tech Titans
+          {/* Tech Titans */}
         </Title>
       </div>
     </Header>
@@ -216,7 +220,7 @@ const AuthCard = ({ children, title, subtitle }) => {
     border: '1px solid rgba(255, 255, 255, 0.05)',
     position: 'relative',
     overflow: 'hidden',
-    paddingTop: title=='Welcome back'? '40px': '0px'
+    paddingTop: title=='Welcome back'? '0px': '0px'
   };
 
   const titleStyle = {

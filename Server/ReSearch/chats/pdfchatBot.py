@@ -285,21 +285,52 @@ class GroqClient:
             return chat_completion.choices[0].message.content
         except:
             return "Invalid image url"
+    
+    def chunk_text(self,text, max_length=5000):
+        
+        chunks = []
+        current_chunk = ""
+
+        # Iterate through the text and add lines to current_chunk
+        for line in text.splitlines():
+            if len(current_chunk) + len(line) + 1 > max_length:  # +1 for newline
+                chunks.append(current_chunk)
+                current_chunk = line  # Start a new chunk
+            else:
+                current_chunk += "\n" + line if current_chunk else line
+
+        if current_chunk:  # Append the last chunk
+            chunks.append(current_chunk)
+        
+        return chunks
                 
 
 
     def summarize_text(self, text: str) -> str:
-    
-            
-        """Summarize text using Groq API."""
-        response = self.client.chat.completions.create(
-            messages=[{
-                "role": "user",
-                "content": f"Summarize this text in less than 150 words: {text}"
-            }],
-            model="llama3-8b-8192"
-        )
-        return response.choices[0].message.content
+        """Summarize large text by chunking it if necessary."""
+        max_length = 5000  # Character limit per chunk (adjust based on your needs)
+
+        # Split text into chunks if it exceeds max_length
+        chunks = self.chunk_text(text, max_length)
+        summaries = []
+
+        for chunk in chunks:
+            response = self.client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": f"""Summarize this text in less than 20 words: {chunk}
+                     Guidlines:
+                     1.Striclty dont include this line at start of text line-"Here is a summary of the text in under 100 words: "
+                     2.Only provide summary and no other introductory text.
+                    """
+                }],
+                model="llama3-8b-8192"
+            )
+            summaries.append(response.choices[0].message.content)
+
+        # Combine the summaries (optional)
+        final_summary = " ".join(summaries)
+        return final_summary
         
 
     def answer_question(self, question: str, context: str, history_context: str,flag:bool=False) -> str:
@@ -403,19 +434,20 @@ class PDFChatbot:
             tables = processor.extract_tables()
             table_documents = processor.process_table(tables)
             extracted_images = processor.extract_images_from_pdf()
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            model, _, transform = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
-            model.eval()
-            model.to(device)
-            INDEX_PATH = "persistent_data/faiss_index"
-            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+            if(extracted_images):
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                model, _, transform = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
+                model.eval()
+                model.to(device)
+                INDEX_PATH = "persistent_data/faiss_index"
+                IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
 
 
-       
-            image_embeddings = processor.generate_image_embeddings(extracted_images, model, transform)
+        
+                image_embeddings = processor.generate_image_embeddings(extracted_images, model, transform)
 
-            processor.save_embeddings_to_faiss(image_embeddings, os.path.join(INDEX_PATH, "image_embeddings.index"))
-            processor.save_image_mapping(image_embeddings, extracted_images, IMAGE_MAPPING_PATH)
+                processor.save_embeddings_to_faiss(image_embeddings, os.path.join(INDEX_PATH, "image_embeddings.index"))
+                processor.save_image_mapping(image_embeddings, extracted_images, IMAGE_MAPPING_PATH)
 
 
             text_chunks = processor.create_chunks(text)

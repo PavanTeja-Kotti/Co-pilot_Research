@@ -44,7 +44,8 @@ const styles = {
     overflowY: 'auto',
     scrollbarWidth: 'none',
     msOverflowStyle: 'none',
-    padding: '0 4px'
+    padding: '0 4px',
+    width: '100%'
   },
   tagBase: {
     borderColor: 'transparent',
@@ -271,13 +272,16 @@ const RecommendationsComponent = React.memo(({ loading, recommendations }) => (
 ));
 
 const ResearchFocusComponent = React.memo(({ loading, topicDistribution }) => (
+
+  
+
   <Col xs={24} lg={8}>
     <div style={{ ...styles.card, maxHeight: '530px' }}>
       {loading ? (
         <>
           <Skeleton active paragraph={{ rows: 1 }} />
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
-            {Array(4).fill(null).map((_, i) => (
+            {Array(7).fill(null).map((_, i) => (
               <div key={i}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <Skeleton.Input style={{ width: 150 }} active size="small" />
@@ -294,14 +298,14 @@ const ResearchFocusComponent = React.memo(({ loading, topicDistribution }) => (
             <Title level={5} style={{ color: '#fff', margin: 0 }}>Research Focus</Title>
             <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>Topic distribution</Text>
           </div>
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
-            {topicDistribution.map((item, index) => (
+          <Space direction="vertical" style={styles.scrollable } size={16}>
+            {topicDistribution?.research_focus?.topic_distribution.map((item, index) => (
               <div key={index}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <Text style={{ color: '#fff' }}>{item.topic}</Text>
+                  <Text style={{ color: '#fff' }}>{item.category}</Text>
                   <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>{item.percentage}%</Text>
                 </div>
-                <div style={{ width: '100%', height: '10px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '10px', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', }}>
                   <div style={{
                     width: `${item.percentage}%`,
                     height: '100%',
@@ -463,7 +467,7 @@ const Dashboard = () => {
       const response = await api.scraping().dynamicPaper({
         limit: ITEMS_PER_PAGE,
         offset: currentOffset,
-        search: state.topicFilter,
+        category: state.topicFilter,
         sort: state.sortBy,
         Table: state.defaultPapers,
         pagginated: 'True'
@@ -508,10 +512,12 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [readingResponse, statsResponse] = await Promise.all([
+        const [readingResponse, statsResponse,researchfocus] = await Promise.all([
           api.scraping().readingstats(),
-          api.scraping().statsdata()
+          api.scraping().statsdata(),
+          api.scraping().getresearchfocus()
         ]);
+
 
         setState(prev => ({
           ...prev,
@@ -538,16 +544,7 @@ const Dashboard = () => {
                 conference: "ICLR 2024"
               }
             ],
-            topicDistribution: [
-              { topic: "Large Language Models", percentage: 35 },
-              { topic: "AI Safety & Ethics", percentage: 25 },
-              { topic: "Model Architecture", percentage: 20 },
-              { topic: "Vision & Multimodal", percentage: 15 },
-              { topic: "Large Language Models", percentage: 35 },
-              { topic: "AI Safety & Ethics", percentage: 25 },
-              { topic: "Model Architecture", percentage: 20 },
-              { topic: "Vision & Multimodal", percentage: 15 }
-            ]
+            topicDistribution: researchfocus.data
           }
         }));
       } catch (error) {
@@ -659,9 +656,9 @@ const Dashboard = () => {
                         dropdownStyle={{ background: '#1f1f1f', borderColor: '#303030' }}
                       >
                         <Option value="all">All Topics</Option>
-                        <Option value="llm">LLM</Option>
-                        <Option value="ethics">AI Ethics</Option>
-                        <Option value="vision">Vision</Option>
+                        {state.data.topicDistribution?.research_focus?.topic_distribution.map((item, index) => {
+                          return <Option key={index} value={item.category}>{item.category}</Option>
+                        })}
                       </Select>
                       <Select 
                         value={state.sortBy}

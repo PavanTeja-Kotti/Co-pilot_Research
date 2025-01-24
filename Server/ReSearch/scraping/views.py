@@ -23,6 +23,7 @@ from .serializers import (
     CategoryLikeSerializer,
     ReadPaperSerializer
 )
+from collections import Counter
 
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -281,6 +282,7 @@ def apply_dynamic_filters(queryset, request):
     user = request.query_params.get('user')
     sort = request.query_params.get('sort')
     search= request.query_params.get('search')
+    print("Search: ", search)
     
     model_name = queryset.model.__name__
 
@@ -481,6 +483,55 @@ def research_paper_list_withoutPage(request):
    
    cache.set(cache_key, all_data, timeout=604800)
    return Response(all_data)
+
+def capitalize_categories(category):
+   words = category.lower().split()
+   return ' '.join(word.capitalize() for word in words)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def research_focus(request):
+   cache_key = "research_focus_stats"
+   cached_data = cache.get(cache_key)
+
+   if cached_data:
+       return Response(cached_data)
+
+   papers = ResearchPaper.objects.all()
+   total_papers = len(papers)
+   
+   category_counts = {}
+   for paper in papers:
+       for category in paper.categories:
+           formatted_category = capitalize_categories(category)
+           category_counts[formatted_category] = category_counts.get(formatted_category, 0) + 1
+
+   distribution = [
+       {
+           "category": cat,
+           "count": count,
+           "percentage": round((count / total_papers) * 100, 1)
+       }
+       for cat, count in sorted(category_counts.items(), 
+                              key=lambda x: x[1], 
+                              reverse=True)
+   ]
+
+   response_data = {
+       "research_focus": {
+           "topic_distribution": distribution,
+           "total_papers": total_papers,
+           "total_categories": len(category_counts)
+       }
+   }
+
+   cache.set(cache_key, response_data, timeout=604800)
+   related_keys = cache.get("research_focus_cache_keys", set())
+   related_keys.add(cache_key)
+   cache.set("research_focus_cache_keys", related_keys)
+
+   return Response(response_data)
+
 
 
 @api_view(['GET'])
