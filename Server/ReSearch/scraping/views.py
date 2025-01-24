@@ -14,7 +14,7 @@ import pandas as pd
 import asyncio
 from django.core.cache import cache
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q,Case, When, Value, IntegerField
 from .models import ResearchPaper, BookmarkedPaper, ResearchPaperCategory, CategoryLike,ReadPaper
 from .serializers import (
     ResearchPaperSerializer, 
@@ -900,114 +900,72 @@ def process_categories(categories):
         return ', '.join([cat.strip().lower() for cat in categories])
     return ''  # Default to an empty string if neither
 
+def chunked_queryset(queryset, ids, chunk_size=900):
+    """
+    Breaks down a large list of IDs into smaller chunks to avoid exceeding SQLite's variable limit.
+    """
+    chunks = [ids[i:i + chunk_size] for i in range(0, len(ids), chunk_size)]
+    q_objects = Q()
+    for chunk in chunks:
+        q_objects |= Q(id__in=chunk)
+    return queryset.filter(q_objects)
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def recomendation_paper(request):
+def recommendation_paper(request):
     if not request.user.is_authenticated:
-        return Response(
-            {'error': 'Authentication required'}, 
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    # Get the list of read paper IDs from ReadPaper model
-    queryset = ReadPaper.objects.filter(user=request.user)
-    read_paper_ids = queryset.values_list('paper_id', flat=True)
+    # Fetch read paper IDs and user interests
+    read_paper_ids = list(ReadPaper.objects.filter(user=request.user).values_list('paper_id', flat=True))
+    user_interests = list(CategoryLike.objects.filter(user=request.user, is_active=True).values_list('category__name', flat=True))
+
+    # Normalize user interests
+    normalized_interests = [interest.strip().lower() for interest in user_interests]
+
+    # Fetch all research papers
+    queryset = ResearchPaper.objects.all()
+    papers_df = pd.DataFrame(list(queryset.values()))
+
+    # Preprocess categories column
+    papers_df['categories'] = papers_df['categories'].apply(process_categories)
+    papers_df['combined_text'] = papers_df['title'] + ' ' + papers_df['abstract'] + ' ' + papers_df['categories']
+
+    tfidf_vectorizer = TfidfVectorizer()
+    tfidf_matrix = tfidf_vectorizer.fit_transform(papers_df['combined_text'].tolist())
 
     if not read_paper_ids:
-        user_interests = CategoryLike.objects.filter(user=request.user, is_active=True).values_list('category__name', flat=True)
-        normalized_interests = [interest.strip().lower() for interest in list(user_interests)]
-
-        # Step 2: Fetch all research papers
-        queryset = ResearchPaper.objects.all()
-        papers_df = pd.DataFrame(list(queryset.values()))
-
-        # Step 3: Preprocess categories column (convert to lowercase for comparison)
-        papers_df['categories'] = papers_df['categories'].apply(process_categories)
-
-        # Step 4: Combine fields into a single column for TF-IDF
-        papers_df['combined_text'] = papers_df['title'] + ' ' + papers_df['abstract'] + ' ' + papers_df['categories']
+        # Recommend based on user interests
         user_profile = ' '.join(normalized_interests)
-
-        # Step 5: Apply TfidfVectorizer
-        tfidf_vectorizer = TfidfVectorizer()
-        tfidf_matrix = tfidf_vectorizer.fit_transform(papers_df['combined_text'].tolist() + [user_profile])
-
-        # Step 6: Compute cosine similarity
-        cosine_similarities = cosine_similarity(tfidf_matrix[-1:], tfidf_matrix[:-1]).flatten()
-
-        # Step 7: Add similarity scores to DataFrame
+        user_profile_tfidf = tfidf_vectorizer.transform([user_profile])
+        cosine_similarities = cosine_similarity(user_profile_tfidf, tfidf_matrix).flatten()
         papers_df['similarity_score'] = cosine_similarities
-
-        # Step 8: Sort by similarity score and filter
-        recommendations = papers_df.sort_values(by='similarity_score', ascending=False).reset_index(drop=True)
-
-        # Step 9: Return recommended papers as a queryset
-        recommendations = recommendations.reset_index(drop=True)
-        recommendations_ids = recommendations['id'].values
-        recommendations_queryset = ResearchPaper.objects.filter(id__in=recommendations_ids)
-
-        recommendations_queryset = recommendations_queryset.order_by(
-            models.Case(
-                *[models.When(id=paper_id, then=models.Value(index)) for index, paper_id in enumerate(recommendations_ids)],
-                default=models.Value(len(recommendations_ids)),
-                output_field=models.IntegerField(),
-            )
-        )    
-        paginator = ResearchPaperPagination()
-            
-        paginated_queryset = paginator.paginate_queryset(recommendations_queryset, request) 
-        serializer = ResearchPaperSerializer(
-                paginated_queryset, 
-                many=True, 
-                context={'request': request}
-            )
-        return paginator.get_paginated_response(serializer.data)
-    queryset = ResearchPaper.objects.all()
-
-    papers_df = pd.DataFrame(list(queryset.values()))
-    papers_df['content'] = papers_df['title'].fillna('').astype(str) + " " + papers_df['abstract'].fillna('').astype(str) + " " + papers_df['categories'].fillna('').astype(str)
-    # Vectorize content using TF-IDF
-    vectorizer = TfidfVectorizer()
-    content_vectors = vectorizer.fit_transform(papers_df['content'])
-    # Calculate similarity scores
-    similarity_scores = cosine_similarity(content_vectors, content_vectors)
-
-    user_indices = []
-    for paper_id in read_paper_ids:
-        matched_rows = papers_df[papers_df['id'] == paper_id]
+    else:
+        # Recommend based on read papers
+        similarity_scores = cosine_similarity(tfidf_matrix)
+        user_indices = [papers_df[papers_df['id'] == paper_id].index[0] for paper_id in read_paper_ids if not papers_df[papers_df['id'] == paper_id].empty]
         
-        if not matched_rows.empty:
-            user_indices.append(matched_rows.index[0])
-        else:
-            print(f"Paper ID {paper_id} not found in the DataFrame")
+        if not user_indices:
+            return Response({'error': 'No valid papers in user history'}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not user_indices:
-        return Response({'error': 'No valid papers in user history'}, status=status.HTTP_400_BAD_REQUEST)
+        mean_similarity_scores = np.mean(similarity_scores[user_indices], axis=0)
+        papers_df['similarity_score'] = mean_similarity_scores
 
-    print(user_indices)
-    mean_similarity_scores = np.mean(similarity_scores[user_indices], axis=0)
+    # Filter out already read papers and sort by similarity score
+    recommendations = papers_df[~papers_df['id'].isin(read_paper_ids)].sort_values(by='similarity_score', ascending=False).reset_index(drop=True)
+    
+    recommendations_ids = recommendations['id'].tolist()
 
-    papers_df['similarity_score'] = mean_similarity_scores
-    recommendations = papers_df[~papers_df['id'].isin(read_paper_ids)].sort_values(by='similarity_score', ascending=False)
-    recommendations = recommendations.reset_index(drop=True)
-    recommendations_ids = recommendations['id'].values
-    recommendations_queryset = ResearchPaper.objects.filter(id__in=recommendations_ids)
+    # Retrieve objects in the same order as recommendations_ids using an in-memory sort
+    recommendations_queryset = list(ResearchPaper.objects.filter(id__in=recommendations_ids))
+    recommendations_queryset.sort(key=lambda x: recommendations_ids.index(x.id))
 
-    recommendations_queryset = recommendations_queryset.order_by(
-        models.Case(
-            *[models.When(id=paper_id, then=models.Value(index)) for index, paper_id in enumerate(recommendations_ids)],
-            default=models.Value(len(recommendations_ids)),
-            output_field=models.IntegerField(),
-        )
-    )    
     paginator = ResearchPaperPagination()
-        
-    paginated_queryset = paginator.paginate_queryset(recommendations_queryset, request) 
-    serializer = ResearchPaperSerializer(
-            paginated_queryset, 
-            many=True, 
-            context={'request': request}
-        )
+    
+    paginated_queryset = paginator.paginate_queryset(recommendations_queryset, request)
+    
+    serializer = ResearchPaperSerializer(paginated_queryset, many=True, context={'request': request})
+    
     return paginator.get_paginated_response(serializer.data)
 
 def summarize_pdf(pdf_url):
