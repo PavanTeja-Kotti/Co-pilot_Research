@@ -9,8 +9,12 @@ const Logo = ({ className = '' }) => {
    display: 'flex',
    alignItems: 'left',
    backgroundColor: 'inherit', // Dark background
+  //  marginLeft:'-10px',
+   transform: 'scale(1.2)'
+
   //  padding: '0.5rem'
  };
+ 
 
  return (
    <img  

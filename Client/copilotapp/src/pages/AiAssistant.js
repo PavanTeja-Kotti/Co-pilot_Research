@@ -1,4 +1,4 @@
-import { Col, Row, Button, Modal, List, theme, Input, Typography, message} from "antd";
+import { Col, Row, Button, Modal, List, theme, Input, Typography, message } from "antd";
 import React, { useState, useRef, useEffect } from "react";
 import { UploadOutlined, DeleteOutlined, EditOutlined, SaveOutlined, PlusOutlined, BoldOutlined, ItalicOutlined, UnderlineOutlined, OrderedListOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import AIChat from "./Chat/AIChat";
@@ -10,6 +10,8 @@ import BulletList from "@tiptap/extension-bullet-list";
 import OrderedList from "@tiptap/extension-ordered-list";
 import ListItem from "@tiptap/extension-list-item";
 import { Picker } from 'emoji-mart';
+import { useAuth } from "../utils/auth";
+import JSZip from 'jszip'; // Import JSZip for unzipping files
 // import 'emoji-mart/css/emoji-mart.css';
 // import Underline from "./extensions/Underline"; 
 
@@ -29,65 +31,84 @@ const EmojiPicker = ({ onSelect }) => {
 const PDFWindow = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [files, setFiles] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const { addUploadedFiles, SetaddUploadedFiles } = useAuth(); // Get the function to add uploaded files
 
-    // Open and close the modal
     const handleOpenModal = () => setIsModalOpen(true);
     const handleCloseModal = () => setIsModalOpen(false);
 
-    // Handle file upload
     const handleFileUpload = (event) => {
         const uploadedFiles = Array.from(event.target.files);
-        setFiles((prevFiles) => [...prevFiles, ...uploadedFiles]);
+        const validFiles = uploadedFiles.filter(file => 
+            file.type === 'application/pdf' || file.type === 'application/zip'
+        );
+
+        if (validFiles.length !== uploadedFiles.length) {
+            message.error('Only PDF and ZIP files are allowed.');
+        }
+
+        setFiles((prevFiles) => [...prevFiles, ...validFiles]);
     };
 
-    // Handle file removal
     const handleRemoveFile = (fileToRemove) => {
         setFiles((prevFiles) =>
             prevFiles.filter((file) => file.name !== fileToRemove.name)
         );
     };
 
-    // Upload files to the backend
     const uploadFiles = async () => {
+        const pdfFilesToUpload = [];
+
+        // Process each file and prepare for upload
+        for (const file of files) {
+            if (file.type === 'application/pdf') {
+                pdfFilesToUpload.push(file);
+            } else if (file.type === 'application/zip') {
+                const zip = new JSZip();
+                const content = await zip.loadAsync(file);
+                // Extract PDF files from ZIP
+                for (const filename of Object.keys(content.files)) {
+                    if (filename.endsWith('.pdf')) {
+                        const pdfBlob = await content.files[filename].async('blob');
+                        pdfFilesToUpload.push(new File([pdfBlob], filename)); // Create a new File object
+                    }
+                }
+            }
+        }
+
+        // Add all valid PDF files to the auth context
+        SetaddUploadedFiles(pdfFilesToUpload);
+
+        // Uploading logic
         const formData = new FormData();
-        files.forEach(file => {
-            formData.append('files', file);
+        pdfFilesToUpload.forEach(pdfFile => {
+            formData.append('files', pdfFile);
         });
 
+        setLoading(true);
         try {
             const response = await fetch('/api/get_list_documents/', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`, // Assuming you store your token in local storage
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
                 },
                 body: formData,
             });
 
             if (!response.ok) {
-                throw new Error('File upload failed');
+                throw new Error(`Upload failed: ${response.statusText}`);
             }
 
             const data = await response.json();
             message.success('Files uploaded successfully');
             console.log('Uploaded file names:', data.file_names);
-            handleCloseModal(); // Close modal after successful upload
-            setFiles([]); // Clear files after upload
+            handleCloseModal();
+            setFiles([]);
         } catch (error) {
             message.error(error.message);
+        } finally {
+            setLoading(false);
         }
-    };
-
-    const listItemStyle = {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "10px",
-        marginBottom: "8px",
-        background: "#333",
-        borderRadius: "5px",
-        border: "1px solid #444",
-        transition: "border-color 0.3s, background-color 0.3s",
-        cursor: "pointer",
     };
 
     return (
@@ -104,7 +125,7 @@ const PDFWindow = () => {
             <List
                 dataSource={files}
                 renderItem={(file) => (
-                    <List.Item style={listItemStyle}>
+                    <List.Item style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span>{file.name}</span>
                         <DeleteOutlined
                             onClick={() => handleRemoveFile(file)}
@@ -119,7 +140,7 @@ const PDFWindow = () => {
                 open={isModalOpen}
                 onCancel={handleCloseModal}
                 footer={[
-                    <Button key="submit" type="primary" onClick={uploadFiles}>
+                    <Button key="submit" type="primary" loading={loading} onClick={uploadFiles}>
                         Upload
                     </Button>,
                     <Button key="back" onClick={handleCloseModal}>
@@ -130,6 +151,7 @@ const PDFWindow = () => {
                 <input
                     type="file"
                     multiple
+                    accept=".pdf,.zip" // Accept only PDF and ZIP files
                     onChange={handleFileUpload}
                     style={{ marginBottom: "10px" }}
                 />
@@ -137,6 +159,7 @@ const PDFWindow = () => {
         </div>
     );
 };
+
 // instead of having title and notes we store like [{title: "", notes: ""}, {title: "", notes: ""}]
 
 const NoteTaking = () => {
@@ -161,7 +184,7 @@ const NoteTaking = () => {
         editorProps: {
             attributes: {
                 class: "editor-content focus:outline-none bg-gray-900 text-white p-4 rounded-md",
-                style: "min-height: 300px;",
+                style: "min-height: 250px; max-height: 250px; overflow-y: auto;",
             },
         },
     });
@@ -310,21 +333,31 @@ const NoteTaking = () => {
 };
 
 const AiAssistant = () => {
-
     const { token } = useToken();
 
     const containerStyle = {
-        height: "100vh",
+        height: "92vh",
         background: "#1f1f1f",
-        padding: "10px",
+        display: "flex",
+        flexDirection: "column",
+    };
+
+    const rowStyle = {
+        display: "flex",
+        flex: 1,
+        overflow: "hidden", // Prevent overflow in the main container
+        margin: "10px"
     };
 
     const boxStyle = {
-        height: "100%",
+        flex: 1,
         background: "#292929",
         border: "1px solid #303030",
         borderRadius: "6px",
         color: "#e6e6e6",
+        margin: "0 6px", // Spacing between columns
+        display: "flex",
+        flexDirection: "column",
     };
 
     const headingStyle = {
@@ -334,35 +367,42 @@ const AiAssistant = () => {
         color: "white",
     };
 
+    const contentStyle = {
+        flex: 1,
+        overflowY: "auto", // Allow vertical scrolling
+        padding: "10px", // Padding for better spacing
+        height: "300px",
+        overflow: "hidden",
+    };
+
     return (
         <div style={containerStyle}>
-            <Row gutter={16} style={{ height: "100%" }}>
-                <Col span={6}>
+            <div style={rowStyle}>
+                <div style={{ flexBasis: '25%', maxWidth: '25%', display: 'flex', flexDirection: 'column' }}>
                     <div style={boxStyle}>
                         <h3 style={headingStyle}>Sources</h3>
-                        <PDFWindow />
+                        <div style={contentStyle}>
+                            <PDFWindow />
+                        </div>
                     </div>
-                </Col>
-                <Col span={8}>
+                </div>
+                <div style={{ flexBasis: '35%', maxWidth: '35%', display: 'flex', flexDirection: 'column' }}>
                     <div style={boxStyle}>
                         <h3 style={headingStyle}>Chat</h3>
-                        <div style={{
-                            flex: 1,
-                            background: token.colorBgContainer,
-                            borderRadius: token.borderRadiusLG,
-                            // padding: 16
-                        }}>
+                        <div style={contentStyle}>
                             <AIChat />
                         </div>
                     </div>
-                </Col>
-                <Col span={10}>
+                </div>
+                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column' }}>
                     <div style={boxStyle}>
                         <h3 style={headingStyle}>Notes</h3>
-                        <NoteTaking />
+                        <div style={contentStyle}>
+                            <NoteTaking />
+                        </div>
                     </div>
-                </Col>
-            </Row>
+                </div>
+            </div>
         </div>
     );
 };
