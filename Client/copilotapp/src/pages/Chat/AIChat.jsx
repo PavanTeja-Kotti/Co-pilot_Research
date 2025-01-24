@@ -153,7 +153,7 @@ const LoadingAnimation = () => {
   );
 };
 
-const Chat = ({ uniqueID, paper=null}) => {
+const Chat = ({ uniqueID, paper=null }) => {
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
@@ -166,7 +166,13 @@ const Chat = ({ uniqueID, paper=null}) => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [sessionId, setSessionId] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
-  const { uploadFile } = useAuth();
+  const { uploadFile, addUploadedFiles } = useAuth();
+
+  console.log("addUploadedFiles: ", addUploadedFiles)
+
+  useEffect(() => {
+    addUploadedFiles.map((e)=>handleFileUpload(e))
+}, []);
 
   // Helper functions for session storage
   const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;

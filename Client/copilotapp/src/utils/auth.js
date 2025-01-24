@@ -132,7 +132,7 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
   const { showError, showSuccess } = useNotification();
   const [state, dispatch] = useReducer(dashboardReducer, initialState);
-
+  const [addUploadedFiles, SetaddUploadedFiles] = useState([]);
 
 
 
@@ -433,7 +433,7 @@ export const AuthProvider = ({ children }) => {
         uploadFile,
         getCachedFile,
         clearFileCache,
-        state, dispatch,fetchDashboardData
+        state, dispatch,fetchDashboardData, SetaddUploadedFiles, addUploadedFiles
       }}
     >
       {children}
