@@ -586,21 +586,7 @@ const DetailSection = React.memo(({ state, dispatch }) => {
 const ItemCard = React.memo(({ item }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const renderDetailItem = useCallback((label, value) => (
-    <div style={{ marginBottom: 16 }}>
-      <Text strong>{label}: </Text>
-      {Array.isArray(value) ? (
-        <Space wrap>
-          {value.map((v, i) => (
-            <Tag key={i}>{v}</Tag>
-          ))}
-        </Space>
-      ) : (
-        <Text>{value}</Text>
-      )}
-    </div>
-  ), []);
-
+  
   return (
     <>
       <Card 
@@ -642,57 +628,86 @@ const ItemCard = React.memo(({ item }) => {
         </Space>
       </Card>
 
-      <Modal
-        title={<Space><FileSearchOutlined />Paper Details</Space>}
-        open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        footer={[
-          <Button key="close" onClick={() => setIsModalOpen(false)}>
-            Close
-          </Button>
-        ]}
-        width={700}
-      >
-        <div style={{ padding: '20px 0' }}>
-          {renderDetailItem('Title', item[CONFIG.fields.title])}
-          {renderDetailItem('Authors', item[CONFIG.arrayFields.authors])}
-          {renderDetailItem('Categories', item[CONFIG.arrayFields.categories])}
-          {renderDetailItem('Publication Date', new Date(item[CONFIG.fields.date]).toLocaleDateString())}
-          <Divider />
-          <div>
-            <Text strong>Abstract:</Text>
-            <Paragraph style={{ marginTop: 8 }}>
-              {item[CONFIG.fields.abstract]}
-            </Paragraph>
-          </div>
-          <Divider />
-          <Space>
-            {item[CONFIG.fields.links.url] && (
-              <Button 
-                type="primary" 
-                href={item[CONFIG.fields.links.url]} 
-                target="_blank" 
-                icon={<LinkOutlined />}
-              >
-                View Source
-              </Button>
-            )}
-            {item[CONFIG.fields.links.pdfUrl] && (
-              <Button 
-                type="default" 
-                href={item[CONFIG.fields.links.pdfUrl]} 
-                target="_blank" 
-                icon={<FilePdfOutlined />}
-              >
-                View PDF
-              </Button>
-            )}
-          </Space>
-        </div>
-      </Modal>
+      <CardModel item={item} isModalOpen={isModalOpen} setIsModalOpen={setIsModalOpen} />
+
+     
     </>
   );
 });
+
+
+const CardModel = React.memo(({ item, isModalOpen, setIsModalOpen }) => {
+
+  const renderDetailItem = useCallback((label, value) => (
+    <div style={{ marginBottom: 16 }}>
+      <Text strong>{label}: </Text>
+      {Array.isArray(value) ? (
+        <Space wrap>
+          {value.map((v, i) => (
+            <Tag key={i}>{v}</Tag>
+          ))}
+        </Space>
+      ) : (
+        <Text>{value}</Text>
+      )}
+    </div>
+  ), []);
+
+
+  return  <Modal
+  title={<Space><FileSearchOutlined />Paper Details</Space>}
+  open={isModalOpen}
+  onCancel={() => setIsModalOpen(false)}
+  footer={[
+    <Button key="close" onClick={() => setIsModalOpen(false)}>
+      Close
+    </Button>
+  ]}
+  width={700}
+>
+  <div style={{ padding: '20px 0' }}>
+    {renderDetailItem('Title', item[CONFIG.fields.title])}
+    {renderDetailItem('Authors', item[CONFIG.arrayFields.authors])}
+    {renderDetailItem('Categories', item[CONFIG.arrayFields.categories])}
+    {renderDetailItem('Publication Date', new Date(item[CONFIG.fields.date]).toLocaleDateString())}
+    <Divider />
+    <div>
+      <Text strong>Abstract:</Text>
+      <Paragraph style={{ marginTop: 8 }}>
+        {item[CONFIG.fields.abstract]}
+      </Paragraph>
+    </div>
+    <Divider />
+    <Space>
+      {item[CONFIG.fields.links.url] && (
+        <Button 
+          type="primary" 
+          href={item[CONFIG.fields.links.url]} 
+          target="_blank" 
+          icon={<LinkOutlined />}
+        >
+          View Source
+        </Button>
+      )}
+      {item[CONFIG.fields.links.pdfUrl] && (
+        <Button 
+          type="default" 
+          href={item[CONFIG.fields.links.pdfUrl]} 
+          target="_blank" 
+          icon={<FilePdfOutlined />}
+        >
+          View PDF
+        </Button>
+      )}
+    </Space>
+  </div>
+</Modal>
+
+
+});
+
+
+export {CardModel}
 
 const SkeletonUI = React.memo(() => (
   <Space direction="vertical" size="large" style={{ width: '100%' }}>
