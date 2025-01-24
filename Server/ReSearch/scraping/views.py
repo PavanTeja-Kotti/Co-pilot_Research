@@ -967,44 +967,55 @@ def recommendation_paper(request):
     if not request.user.is_authenticated:
         return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    # Fetch read paper IDs and user interests
+    # Fetch read paper IDs and user interests with efficient querying
     read_paper_ids = list(ReadPaper.objects.filter(user=request.user).values_list('paper_id', flat=True))
     user_interests = list(CategoryLike.objects.filter(user=request.user, is_active=True).values_list('category__name', flat=True))
 
     # Normalize user interests
     normalized_interests = [interest.strip().lower() for interest in user_interests]
 
-    # Fetch all research papers
-    queryset = ResearchPaper.objects.all()
-    papers_df = pd.DataFrame(list(queryset.values()))
+    # Use cache to store recommendations for faster retrieval
+    cache_key = f'recommendations_{request.user.id}'
+    recommendations = cache.get(cache_key)
 
-    # Preprocess categories column
-    papers_df['categories'] = papers_df['categories'].apply(process_categories)
-    papers_df['combined_text'] = papers_df['title'] + ' ' + papers_df['abstract'] + ' ' + papers_df['categories']
+    if recommendations is None:
+        # Fetch all research papers with only necessary fields
+        queryset = ResearchPaper.objects.only('id', 'title', 'abstract', 'categories').all()
+        papers_df = pd.DataFrame(list(queryset.values()))
 
-    tfidf_vectorizer = TfidfVectorizer()
-    tfidf_matrix = tfidf_vectorizer.fit_transform(papers_df['combined_text'].tolist())
+        # Preprocess categories column
+        papers_df['categories'] = papers_df['categories'].apply(process_categories)
+        papers_df['combined_text'] = papers_df['title'] + ' ' + papers_df['abstract'] + ' ' + papers_df['categories']
 
-    if not read_paper_ids:
-        # Recommend based on user interests
-        user_profile = ' '.join(normalized_interests)
-        user_profile_tfidf = tfidf_vectorizer.transform([user_profile])
-        cosine_similarities = cosine_similarity(user_profile_tfidf, tfidf_matrix).flatten()
-        papers_df['similarity_score'] = cosine_similarities
+        tfidf_vectorizer = TfidfVectorizer()
+        tfidf_matrix = tfidf_vectorizer.fit_transform(papers_df['combined_text'].tolist())
+
+        if not read_paper_ids:
+            # Recommend based on user interests
+            user_profile = ' '.join(normalized_interests)
+            user_profile_tfidf = tfidf_vectorizer.transform([user_profile])
+            cosine_similarities = cosine_similarity(user_profile_tfidf, tfidf_matrix).flatten()
+            papers_df['similarity_score'] = cosine_similarities
+        else:
+            # Recommend based on read papers
+            similarity_scores = cosine_similarity(tfidf_matrix)
+            user_indices = [papers_df[papers_df['id'] == paper_id].index[0] for paper_id in read_paper_ids if not papers_df[papers_df['id'] == paper_id].empty]
+            
+            if not user_indices:
+                return Response({'error': 'No valid papers in user history'}, status=status.HTTP_400_BAD_REQUEST)
+
+            mean_similarity_scores = np.mean(similarity_scores[user_indices], axis=0)
+            papers_df['similarity_score'] = mean_similarity_scores
+
+        # Filter out already read papers and sort by similarity score
+        recommendations = papers_df[~papers_df['id'].isin(read_paper_ids)].sort_values(by='similarity_score', ascending=False).reset_index(drop=True)
+
+        # Cache the recommendations for future requests
+        cache.set(cache_key, recommendations.to_dict(orient='records'), timeout=3600)  # Cache for 1 hour
+
     else:
-        # Recommend based on read papers
-        similarity_scores = cosine_similarity(tfidf_matrix)
-        user_indices = [papers_df[papers_df['id'] == paper_id].index[0] for paper_id in read_paper_ids if not papers_df[papers_df['id'] == paper_id].empty]
-        
-        if not user_indices:
-            return Response({'error': 'No valid papers in user history'}, status=status.HTTP_400_BAD_REQUEST)
+        recommendations = pd.DataFrame(recommendations)
 
-        mean_similarity_scores = np.mean(similarity_scores[user_indices], axis=0)
-        papers_df['similarity_score'] = mean_similarity_scores
-
-    # Filter out already read papers and sort by similarity score
-    recommendations = papers_df[~papers_df['id'].isin(read_paper_ids)].sort_values(by='similarity_score', ascending=False).reset_index(drop=True)
-    
     recommendations_ids = recommendations['id'].tolist()
 
     # Retrieve objects in the same order as recommendations_ids using an in-memory sort
@@ -1018,6 +1029,7 @@ def recommendation_paper(request):
     serializer = ResearchPaperSerializer(paginated_queryset, many=True, context={'request': request})
     
     return paginator.get_paginated_response(serializer.data)
+
 
 def summarize_pdf(pdf_url):
     return "Summarized text"
