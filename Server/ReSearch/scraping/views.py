@@ -280,10 +280,18 @@ def apply_dynamic_filters(queryset, request):
     is_active = request.query_params.get('is_active')
     user = request.query_params.get('user')
     sort = request.query_params.get('sort')
+    search= request.query_params.get('search')
     
     model_name = queryset.model.__name__
 
     if model_name == 'ResearchPaper':
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(abstract__icontains=search) |
+                Q(authors__icontains=search)
+            )
+        
         if title:
             filters['title__icontains'] = title
         if source:
@@ -296,6 +304,14 @@ def apply_dynamic_filters(queryset, request):
             filters['publication_date__lte'] = date_to
             
     elif model_name in ['BookmarkedPaper', 'ReadPaper', 'CategoryLike']:
+
+        if search:
+            queryset = queryset.filter(
+                Q(paper__title__icontains=search) |
+                Q(paper__abstract__icontains=search) |
+                Q(paper__authors__icontains=search)
+            )
+
         if user:
             filters['user_id'] = user
         if is_active is not None:
