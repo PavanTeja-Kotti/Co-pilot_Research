@@ -282,6 +282,7 @@ def apply_dynamic_filters(queryset, request):
     user = request.query_params.get('user')
     sort = request.query_params.get('sort')
     search= request.query_params.get('search')
+    print("Search: ", search)
     
     model_name = queryset.model.__name__
 
