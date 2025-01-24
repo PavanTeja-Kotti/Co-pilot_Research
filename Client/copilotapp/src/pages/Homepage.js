@@ -272,6 +272,9 @@ const RecommendationsComponent = React.memo(({ loading, recommendations }) => (
 ));
 
 const ResearchFocusComponent = React.memo(({ loading, topicDistribution }) => (
+
+  
+
   <Col xs={24} lg={8}>
     <div style={{ ...styles.card, maxHeight: '530px' }}>
       {loading ? (
@@ -296,7 +299,7 @@ const ResearchFocusComponent = React.memo(({ loading, topicDistribution }) => (
             <Text style={{ color: 'rgba(255, 255, 255, 0.45)' }}>Topic distribution</Text>
           </div>
           <Space direction="vertical" style={styles.scrollable } size={16}>
-            {topicDistribution.map((item, index) => (
+            {topicDistribution?.research_focus?.topic_distribution.map((item, index) => (
               <div key={index}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <Text style={{ color: '#fff' }}>{item.category}</Text>
@@ -464,7 +467,7 @@ const Dashboard = () => {
       const response = await api.scraping().dynamicPaper({
         limit: ITEMS_PER_PAGE,
         offset: currentOffset,
-        search: state.topicFilter,
+        category: state.topicFilter,
         sort: state.sortBy,
         Table: state.defaultPapers,
         pagginated: 'True'
@@ -515,7 +518,6 @@ const Dashboard = () => {
           api.scraping().getresearchfocus()
         ]);
 
-        console.log('readingResponse',researchfocus);
 
         setState(prev => ({
           ...prev,
@@ -542,7 +544,7 @@ const Dashboard = () => {
                 conference: "ICLR 2024"
               }
             ],
-            topicDistribution: researchfocus.data?.research_focus?.topic_distribution||[]
+            topicDistribution: researchfocus.data
           }
         }));
       } catch (error) {
@@ -654,9 +656,9 @@ const Dashboard = () => {
                         dropdownStyle={{ background: '#1f1f1f', borderColor: '#303030' }}
                       >
                         <Option value="all">All Topics</Option>
-                        <Option value="llm">LLM</Option>
-                        <Option value="ethics">AI Ethics</Option>
-                        <Option value="vision">Vision</Option>
+                        {state.data.topicDistribution?.research_focus?.topic_distribution.map((item, index) => {
+                          return <Option key={index} value={item.category}>{item.category}</Option>
+                        })}
                       </Select>
                       <Select 
                         value={state.sortBy}
