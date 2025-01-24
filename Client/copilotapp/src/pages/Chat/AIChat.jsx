@@ -153,7 +153,7 @@ const LoadingAnimation = () => {
   );
 };
 
-const Chat = ({ uniqueID, paper=null }) => {
+const Chat = ({ uniqueID, paper=null}) => {
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
