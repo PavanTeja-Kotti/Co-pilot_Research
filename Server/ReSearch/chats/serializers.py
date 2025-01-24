@@ -6,10 +6,16 @@ from .models import (
     Message, 
     MessageAttachment, 
     GroupMembership, 
-    MessageReceipt
+    MessageReceipt,
+    UserChatNote
 )
 
 User = get_user_model()
+
+class UserChatNotesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserChatNote
+        fields = ['title', 'notes']
 
 class UserBasicSerializer(serializers.ModelSerializer):
     """Basic user information serializer"""

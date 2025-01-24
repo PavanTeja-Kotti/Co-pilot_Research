@@ -269,6 +269,170 @@ def research_paper_list_withPage(request):
 
 
 
+def apply_dynamic_filters(queryset, request):
+    filters = {}
+    
+    title = request.query_params.get('title')
+    source = request.query_params.get('source')
+    category = request.query_params.get('category')
+    date_from = request.query_params.get('date_from')
+    date_to = request.query_params.get('date_to')
+    is_active = request.query_params.get('is_active')
+    user = request.query_params.get('user')
+    sort = request.query_params.get('sort')
+    
+    model_name = queryset.model.__name__
+
+    if model_name == 'ResearchPaper':
+        if title:
+            filters['title__icontains'] = title
+        if source:
+            filters['source'] = source
+        if category:
+            filters['categories__contains'] = [category]
+        if date_from:
+            filters['publication_date__gte'] = date_from
+        if date_to:
+            filters['publication_date__lte'] = date_to
+            
+    elif model_name in ['BookmarkedPaper', 'ReadPaper', 'CategoryLike']:
+        if user:
+            filters['user_id'] = user
+        if is_active is not None:
+            filters['is_active'] = is_active == 'True'
+        if date_from:
+            date_field = 'bookmarked_at' if model_name == 'BookmarkedPaper' else 'read_at' if model_name == 'ReadPaper' else 'created_at'
+            filters[f'{date_field}__gte'] = date_from
+        if date_to:
+            date_field = 'bookmarked_at' if model_name == 'BookmarkedPaper' else 'read_at' if model_name == 'ReadPaper' else 'created_at'
+            filters[f'{date_field}__lte'] = date_to
+            
+    elif model_name == 'ResearchPaperCategory':
+        if title:
+            filters['name__icontains'] = title
+
+    # Apply filters to queryset
+    queryset = queryset.filter(**filters)
+    
+    # Apply sorting
+    if sort:
+        sort_field = sort.lstrip('-')
+        if hasattr(queryset.model, sort_field):
+            queryset = queryset.order_by(sort)
+            
+    return queryset
+    
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def dynamic_paper_list(request):
+    Table= request.query_params.get('Table')
+    Topic= request.query_params.get('Topic')
+    Sort= request.query_params.get('Sort')
+    pagginated= request.query_params.get('pagginated')
+    limit= request.query_params.get('limit')
+    offset= request.query_params.get('offset')
+
+    if Table ==   'ResearchPaper':
+        queryset = ResearchPaper.objects.all()
+    elif Table == 'BookmarkedPaper':
+        queryset = BookmarkedPaper.objects.all()
+    elif Table == 'ResearchPaperCategory':
+        queryset = ResearchPaperCategory.objects.all()
+    elif Table == 'CategoryLike':
+        queryset = CategoryLike.objects.all()
+    elif Table == 'ReadPaper':
+        queryset = ReadPaper.objects.all()
+    else:
+        return Response({"error": "Table not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    filtered_queryset = apply_dynamic_filters(queryset, request)
+
+    if pagginated == 'True':
+        paginator = ResearchPaperPagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+        if Table == 'ResearchPaper':
+            serializer = ResearchPaperSerializer(
+                paginated_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'BookmarkedPaper':
+            serializer = BookmarkedPaperSerializer(
+                paginated_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'ResearchPaperCategory':
+            serializer = CategorySerializer(
+                paginated_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'CategoryLike':
+            serializer = CategoryLikeSerializer(
+                paginated_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'ReadPaper':
+            serializer = ReadPaperSerializer(
+                paginated_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        return paginator.get_paginated_response(serializer.data)
+
+    else:
+        if Table == 'ResearchPaper':
+            serializer = ResearchPaperSerializer(
+                filtered_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'BookmarkedPaper':
+            serializer = BookmarkedPaperSerializer(
+                filtered_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'ResearchPaperCategory':
+            serializer = CategorySerializer(
+                filtered_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'CategoryLike':
+            serializer = CategoryLikeSerializer(
+                filtered_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        elif Table == 'ReadPaper':
+            serializer = ReadPaperSerializer(
+                filtered_queryset, 
+                many=True, 
+                context={'request': request}
+            )
+        return Response(serializer.data)
+
+        
+
+       
+    
+       
+
+    
+
+
+    
+
+    
+
+   
+
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list_withoutPage(request):

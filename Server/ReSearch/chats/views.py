@@ -1,17 +1,20 @@
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Exists, OuterRef
+from django.core.files.storage import default_storage
+import zipfile
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .models import Chat, GroupChat, Message, MessageReceipt, GroupMembership
+from .models import Chat, GroupChat, Message, MessageReceipt, GroupMembership, UserChatNote
 from .serializers import (
     ChatSerializer, 
     GroupChatSerializer, 
     MessageSerializer, 
     MessageCreateSerializer,
-    GroupMembershipSerializer
+    GroupMembershipSerializer,
+    UserChatNotesSerializer
 )
 from .services import RedisService
 
@@ -318,3 +321,56 @@ def delete_message(request, message_id):
     )
     message.soft_delete()
     return Response({'status': 'message deleted'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_chat_notes(request):
+    serializer = UserChatNotesSerializer(data=request.data)
+
+    if serializer.is_valid():
+        # Set the user from the request
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_chat_notes(request):
+    # Query the notes for the authenticated user
+    notes = UserChatNote.objects.filter(user=request.user, is_active=True)  # Assuming you want only active notes
+    serializer = UserChatNotesSerializer(notes, many=True)
+    
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def get_list_documents(request):
+    # Initialize an empty list to store file names
+    file_names = []
+
+    # Check if files are present in the request
+    if 'files' not in request.FILES:
+        return Response({"error": "No files provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Iterate over each uploaded file
+    for uploaded_file in request.FILES.getlist('files'):
+        # Check if the file is a ZIP file
+        if uploaded_file.name.endswith('.zip'):
+            # Create a temporary directory to extract files
+            temp_dir = default_storage.save('temp/', None)
+            with zipfile.ZipFile(uploaded_file, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+                # Add the extracted file names to the list
+                for extracted_file in os.listdir(temp_dir):
+                    file_names.append(extracted_file)
+            # Clean up: Remove the temporary directory after use (optional)
+            # You may want to implement proper cleanup logic here.
+        elif uploaded_file.name.endswith('.pdf'):
+            # If it's a PDF, just add its name to the list
+            file_names.append(uploaded_file.name)
+        else:
+            return Response({"error": f"Unsupported file type: {uploaded_file.name}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({"file_names": file_names}, status=status.HTTP_201_CREATED)

@@ -302,9 +302,10 @@ class GroqClient:
         return response.choices[0].message.content
         
 
-    def answer_question(self, question: str, context: str, history_context: str) -> str:
+    def answer_question(self, question: str, context: str, history_context: str,flag:bool=False) -> str:
         """Generate answer using Groq API."""
-        response = self.client.chat.completions.create(
+        if(flag):
+            response = self.client.chat.completions.create(
             messages=[{
                 "role": "user",
                 "content": f"""
@@ -316,10 +317,6 @@ class GroqClient:
                 Question: {question}
                 Current context: {context}
                 Conversation history: {history_context}
-
-                if - user question has greeting(hi,How are you,hello) respond with appropriate greeting and keep the answer short(one line)
-                else - Repons with "Sorry i cant answer this question" for any other generic question which is not related to given context and keep the answer short(one line).
-                  
 
                 Guidelines:
                 1. Use the context intelligently and integrate relevant information
@@ -337,6 +334,40 @@ class GroqClient:
             }],
             model="llama-3.1-70b-versatile",
         )
+        else :
+            response = self.client.chat.completions.create(
+                messages=[{
+                    "role": "user",
+                    "content": f"""
+                    You are an intelligent AI assistant capable of generating insightful, 
+                    context-aware answers. Your goal is to understand the user's question 
+                    and craft a thoughtful, relevant response based on both the current 
+                    context and historical context.
+
+                    Question: {question}
+                    Current context: {context}
+                    Conversation history: {history_context}
+
+                    if - user question has greeting(hi,How are you,hello) respond with appropriate greeting and keep the answer short(one line)
+                    else - Repons with "Sorry i cant answer this question" for any other generic question which is not related to given context and keep the answer short(one line).
+                    
+
+                    Guidelines:
+                    1. Use the context intelligently and integrate relevant information
+                    2. Provide answers based on reasoning
+                    3. Be concise and relevant
+                    4. Engage naturally with a friendly and professional tone'
+                    5 Please respond with a well-structured with proper format but no markdown formatting
+                    *Use bullet points for lists or key points.
+                    *Add line breaks between paragraphs to improve readability.
+                    *Use headings or bold text to emphasize important sections or concepts when necessary.
+                    6.Dont use phrase like "this was the context and history context given by user"
+                    7.Do not include any information about the context, just respond directly to the question based on the provided context.
+            
+                """
+                }],
+                model="llama-3.1-70b-versatile",
+            )
         return response.choices[0].message.content
 
 @dataclass
@@ -414,7 +445,7 @@ class PDFChatbot:
 
 
 
-    def ask_question(self, question: str, k: int = 5) -> str:
+    def ask_question(self, question: str,group :bool=False, k: int = 5) -> str:
         """
         Ask a question by fetching similar documents from both text and table indices.
 
@@ -472,7 +503,7 @@ class PDFChatbot:
         combined_context = " ".join([doc.page_content for doc in text_docs + table_docs])
 
         if not combined_context:
-            answer = self.groq_client.answer_question(question, "", "")
+            answer = self.groq_client.answer_question(question, "", "",group)
         
 
         # Combine history context
