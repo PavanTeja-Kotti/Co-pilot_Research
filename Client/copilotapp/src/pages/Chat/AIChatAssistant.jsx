@@ -544,26 +544,6 @@ const Chat = ({ uniqueID, paper = null }) => {
 
         <div style={styles.aiChatInput} className="chat-input-container">
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            {/* File Upload Button */}
-            <Upload
-              showUploadList={false}
-              beforeUpload={handleFileUpload}
-              accept="image/*,.pdf,.doc,.docx,.txt"
-            >
-              <Button
-                icon={<PaperClipOutlined />}
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderColor: "#1A1A1A",
-                  color: "#fff",
-                  borderRadius: "3px", // Boxy design with minimal rounding
-                  padding: "6px 10px",
-                  height: "32px",
-                  transition: "all 0.2s ease",
-                }}
-                disabled={!isConnected || isLoading || isWaitingForAI}
-              />
-            </Upload>
 
             {/* Input Text Area */}
             <TextArea

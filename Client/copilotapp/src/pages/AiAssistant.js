@@ -1,7 +1,7 @@
-import { Col, Row, Button, Modal, List, theme, Input, Typography, message } from "antd";
+import { Button, List, theme, Input, Typography, message, Checkbox } from "antd";
 import React, { useState, useRef, useEffect } from "react";
 import { UploadOutlined, DeleteOutlined, EditOutlined, SaveOutlined, PlusOutlined, BoldOutlined, ItalicOutlined, UnderlineOutlined, OrderedListOutlined, UnorderedListOutlined } from "@ant-design/icons";
-import AIChat from "./Chat/AIChat";
+import AIChat from "./Chat/AIChatAssistant";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Bold from "@tiptap/extension-bold";
@@ -11,6 +11,7 @@ import OrderedList from "@tiptap/extension-ordered-list";
 import ListItem from "@tiptap/extension-list-item";
 import { Picker } from 'emoji-mart';
 import { useAuth } from "../utils/auth";
+import './Chat/PDFWindow.css'; 
 import JSZip from 'jszip'; // Import JSZip for unzipping files
 // import 'emoji-mart/css/emoji-mart.css';
 // import Underline from "./extensions/Underline"; 
@@ -29,15 +30,15 @@ const EmojiPicker = ({ onSelect }) => {
 };
 
 const PDFWindow = () => {
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [files, setFiles] = useState([]);
     const [loading, setLoading] = useState(false);
-    const { addUploadedFiles, SetaddUploadedFiles } = useAuth(); // Get the function to add uploaded files
+    const [searchWeb, setSearchWeb] = useState(false); // State for checkbox
+    const { SetaddUploadedFiles } = useAuth(); // Get the function to add uploaded files
+    const fileInputRef = useRef(null); // Create a ref for the file input
+    const [isHovered, setIsHovered] = useState(false); // State for main container hover
+    const [hoveredItemIndex, setHoveredItemIndex] = useState(null); // 
 
-    const handleOpenModal = () => setIsModalOpen(true);
-    const handleCloseModal = () => setIsModalOpen(false);
-
-    const handleFileUpload = (event) => {
+    const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
         const validFiles = uploadedFiles.filter(file =>
             file.type === 'application/pdf' || file.type === 'application/zip'
@@ -48,6 +49,10 @@ const PDFWindow = () => {
         }
 
         setFiles((prevFiles) => [...prevFiles, ...validFiles]);
+        event.target.value = null; // Reset input value to allow re-upload of the same file
+
+        // Call uploadFiles directly after handling file selection
+        await uploadFiles(validFiles);
     };
 
     const handleRemoveFile = (fileToRemove) => {
@@ -56,11 +61,11 @@ const PDFWindow = () => {
         );
     };
 
-    const uploadFiles = async () => {
+    const uploadFiles = async (validFiles) => {
         const pdfFilesToUpload = [];
 
         // Process each file and prepare for upload
-        for (const file of files) {
+        for (const file of validFiles) {
             if (file.type === 'application/pdf') {
                 pdfFilesToUpload.push(file);
             } else if (file.type === 'application/zip') {
@@ -102,8 +107,7 @@ const PDFWindow = () => {
             const data = await response.json();
             message.success('Files uploaded successfully');
             console.log('Uploaded file names:', data.file_names);
-            handleCloseModal();
-            setFiles([]);
+            setFiles([]); // Clear files after successful upload
         } catch (error) {
             message.error(error.message);
         } finally {
@@ -111,22 +115,50 @@ const PDFWindow = () => {
         }
     };
 
+    const handleOpenFileInput = () => {
+        if (fileInputRef.current) {
+            fileInputRef.current.click(); // Programmatically click the hidden file input
+        }
+    };
+
     return (
-        <div style={{ padding: "10px", height: "100%" }}>
+        <div className="pdf-window" style={{ padding: "10px", height: "100%" }}>
             <Button
                 type="primary"
-                onClick={handleOpenModal}
+                onClick={handleOpenFileInput} // Open file input directly
                 icon={<UploadOutlined />}
                 style={{ marginBottom: "10px", width: '100%' }}
             >
                 Add Source
             </Button>
 
-            <List
+            <input
+                type="file"
+                multiple
+                accept=".pdf,.zip" // Accept only PDF and ZIP files
+                onChange={handleFileUpload}
+                style={{ display: 'none' }} // Hide the file input
+                ref={fileInputRef} // Attach ref to the input
+            />
+
+<List
                 dataSource={files}
-                renderItem={(file) => (
-                    <List.Item style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span>{file.name}</span>
+                renderItem={(file, index) => (
+                    <List.Item 
+                        style={{
+                            display: "flex", 
+                            justifyContent: "space-between", 
+                            alignItems: "center",
+                            backgroundColor: hoveredItemIndex === index ? '#1E1E1E' : '#292929', // Background color for list items with hover effect
+                            borderRadius: "4px",
+                            marginBottom: "10px", // Space between list items
+                            padding: "10px", // Padding inside list items
+                            transition: "background-color 0.3s ease",
+                        }}
+                        onMouseEnter={() => setHoveredItemIndex(index)} 
+                        onMouseLeave={() => setHoveredItemIndex(null)}
+                    >
+                        <span style={{ color: '#ffffff', flexGrow: 1 }}>{file.name}</span>
                         <DeleteOutlined
                             onClick={() => handleRemoveFile(file)}
                             style={{ color: 'red', cursor: 'pointer' }}
@@ -135,27 +167,15 @@ const PDFWindow = () => {
                 )}
             />
 
-            <Modal
-                title="Upload Files"
-                open={isModalOpen}
-                onCancel={handleCloseModal}
-                footer={[
-                    <Button key="submit" type="primary" loading={loading} onClick={uploadFiles}>
-                        Upload
-                    </Button>,
-                    <Button key="back" onClick={handleCloseModal}>
-                        Cancel
-                    </Button>
-                ]}
-            >
-                <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.zip" // Accept only PDF and ZIP files
-                    onChange={handleFileUpload}
-                    style={{ marginBottom: "10px" }}
-                />
-            </Modal>
+            {/* Checkbox for searching the web */}
+            <div style={{ marginTop: "10px" }}>
+                <Checkbox 
+                    checked={searchWeb} 
+                    onChange={(e) => setSearchWeb(e.target.checked)} 
+                >
+                    Do you want to search the web?
+                </Checkbox>
+            </div>
         </div>
     );
 };
