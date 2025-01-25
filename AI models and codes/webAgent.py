@@ -5,7 +5,7 @@ from phi.tools.duckduckgo import DuckDuckGo
 from rich.prompt import Prompt
 import os
 import typer
-os.environ["GROQ_API_KEY"] = "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"
+os.environ["GROQ_API_KEY"] = ""
 def multi_agent(user: str = "user"):
     web_agent = Agent(
         name="Web Agent",
