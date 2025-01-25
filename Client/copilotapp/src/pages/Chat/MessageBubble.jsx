@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Typography, Progress, Modal } from 'antd';
-import { 
+import {
   DownloadOutlined,
   ExpandOutlined,
   FileImageOutlined,
@@ -32,15 +32,15 @@ const RichContent = ({ content }) => {
     const htmlRegex = /<(?!.*?markdown-renderer)([a-z][a-z0-9]*)\b[^>]*>/i;
     return htmlRegex.test(str);
   };
-  
+
   // Helper function to detect if content is a table structure
   const isTableStructure = (str) => {
     if (typeof str !== 'string') return false;
     try {
       const data = JSON.parse(str);
-      return Array.isArray(data) && 
-             data.length > 0 && 
-             data.every(row => row && typeof row === 'object' && !Array.isArray(row));
+      return Array.isArray(data) &&
+        data.length > 0 &&
+        data.every(row => row && typeof row === 'object' && !Array.isArray(row));
     } catch {
       return false;
     }
@@ -51,8 +51,8 @@ const RichContent = ({ content }) => {
     if (typeof str !== 'string') return false;
     const listPattern = /^[ \t]*(?:\d+\.|\*|\-|\+)[ \t]+\S/m;
     const lines = str.split('\n');
-    return lines.some(line => listPattern.test(line)) && 
-           lines.filter(line => line.trim()).length > 0;
+    return lines.some(line => listPattern.test(line)) &&
+      lines.filter(line => line.trim()).length > 0;
   };
 
   // Helper function to detect code blocks with improved detection
@@ -70,14 +70,14 @@ const RichContent = ({ content }) => {
   const sanitizeHTML = (html) => {
     // Basic HTML sanitization
     return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-               .replace(/on\w+="[^"]*"/g, '')
-               .replace(/javascript:/gi, '');
+      .replace(/on\w+="[^"]*"/g, '')
+      .replace(/javascript:/gi, '');
   };
 
   // Helper function for parsing markdown-style formatting
   const parseMarkdown = (text) => {
     if (typeof text !== 'string') return text;
-    
+
     const parts = [];
     let currentIndex = 0;
     const markdownRegex = /(\*\*.*?\*\*|\*.*?\*|_.*?_|`.*?`)/g;
@@ -94,8 +94,8 @@ const RichContent = ({ content }) => {
         parts.push(<strong key={match.index}>{fullMatch.slice(2, -2)}</strong>);
       } else if (fullMatch.startsWith('`') && fullMatch.endsWith('`')) {
         parts.push(<code key={match.index} className="inline-code">{fullMatch.slice(1, -1)}</code>);
-      } else if ((fullMatch.startsWith('*') && fullMatch.endsWith('*')) || 
-                 (fullMatch.startsWith('_') && fullMatch.endsWith('_'))) {
+      } else if ((fullMatch.startsWith('*') && fullMatch.endsWith('*')) ||
+        (fullMatch.startsWith('_') && fullMatch.endsWith('_'))) {
         parts.push(<em key={match.index}>{fullMatch.slice(1, -1)}</em>);
       }
 
@@ -128,7 +128,7 @@ const RichContent = ({ content }) => {
     // Handle HTML content
     if (containsHTML(content)) {
       return (
-        <div 
+        <div
           dangerouslySetInnerHTML={{ __html: sanitizeHTML(content) }}
           className="max-w-full overflow-auto text-inherit"
         />
@@ -140,7 +140,7 @@ const RichContent = ({ content }) => {
       try {
         const tableData = JSON.parse(content);
         const headers = Object.keys(tableData[0]);
-        
+
         return (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
@@ -183,11 +183,11 @@ const RichContent = ({ content }) => {
 
             const isNumbered = /^\d+\.\s/.test(trimmedLine);
             const isBullet = /^[\*\-\+]\s/.test(trimmedLine);
-            
+
             if (isNumbered || isBullet) {
               const marker = isNumbered ? trimmedLine.match(/^\d+\./)[0] : '•';
               const content = trimmedLine.replace(/^(\d+\.|\*|\-|\+)\s+/, '');
-              
+
               return (
                 <div key={index} className="mb-2 flex text-inherit">
                   <span className="mr-2 min-w-[20px] text-right">{marker}</span>
@@ -302,7 +302,7 @@ const FILE_TYPES = {
 // Get file type from extension
 const getFileType = (fileName) => {
   const extension = fileName.toLowerCase().slice(fileName.lastIndexOf('.'));
-  return Object.entries(FILE_TYPES).find(([_, config]) => 
+  return Object.entries(FILE_TYPES).find(([_, config]) =>
     config.extensions.includes(extension)
   )?.[0] || 'DEFAULT';
 };
@@ -324,39 +324,39 @@ const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
       setError("File URL is missing");
       return;
     }
-  
+
     try {
       setLoading(true);
       setError(null);
-  
+
       // Dynamically import pdfjs and worker
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf");
       const pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.entry");
-  
+
       // Set up the worker
       pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
-  
+
       // Load the PDF document
       const loadingTask = pdfjsLib.getDocument(fileUrl);
       const pdf = await loadingTask.promise;
       const totalPages = pdf.numPages;
-  
+
       const pagesPromises = Array.from({ length: Math.min(totalPages, 3) }, async (_, i) => {
         const page = await pdf.getPage(i + 1);
         const viewport = page.getViewport({ scale: 1.5 });
-  
+
         // Create a canvas element for rendering
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-  
+
         await page.render({ canvasContext: context, viewport }).promise;
-  
+
         // Convert canvas to data URL and return
         return canvas.toDataURL();
       });
-  
+
       const pdfPages = await Promise.all(pagesPromises);
       setPdfPages(pdfPages);
     } catch (error) {
@@ -366,7 +366,7 @@ const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
       setLoading(false);
     }
   };
-  
+
   const renderPreview = () => {
     switch (fileType) {
       case 'IMAGE':
@@ -395,7 +395,7 @@ const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
         );
       case 'PDF':
         return (
-          <div style={{ 
+          <div style={{
             maxHeight: '90vh',
             overflowY: 'auto',
             backgroundColor: '#f0f0f0',
@@ -435,7 +435,7 @@ const PreviewModal = ({ visible, fileUrl, fileType, onClose, fileName }) => {
             backgroundColor: '#fff',
             overflowY: 'auto'
           }}>
-            <pre style={{ 
+            <pre style={{
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
               fontFamily: 'monospace'
@@ -492,7 +492,7 @@ const LazyPreviewLoader = ({ attachment, onLoad, isOwnMessage }) => {
   }, [isVisible, onLoad]);
 
   return (
-    <div 
+    <div
       ref={ref}
       style={{
         width: '100%',
@@ -504,7 +504,7 @@ const LazyPreviewLoader = ({ attachment, onLoad, isOwnMessage }) => {
       }}
     >
       {!hasTriggeredLoad.current && (
-        <FileIcon style={{ 
+        <FileIcon style={{
           fontSize: 32,
           opacity: 0.5,
           color: isOwnMessage ? '#1677ff' : '#8c8c8c'
@@ -521,7 +521,7 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { downloadFile } = useAuth();
-  
+
   const fileType = getFileType(attachment.file_name);
   const FileIcon = FILE_TYPES[fileType].icon;
   const canPreview = FILE_TYPES[fileType].preview;
@@ -538,7 +538,7 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
     try {
       setIsLoading(true);
       const fileData = await downloadFile(attachment.file_path);
-      
+
       if (fileData?.blob) {
         if (contentType === 'text') {
           const text = await fileData.blob.text();
@@ -573,7 +573,7 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
   };
 
   return (
-    <div 
+    <div
       className="file-preview"
       onMouseEnter={() => setShowOverlay(true)}
       onMouseLeave={() => setShowOverlay(false)}
@@ -593,7 +593,7 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
         alignItems: 'center',
         gap: '12px'
       }}>
-        <FileIcon style={{ 
+        <FileIcon style={{
           fontSize: 24,
           color: isOwnMessage ? '#1677ff' : '#8c8c8c'
         }} />
@@ -622,11 +622,11 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
             {(attachment.file_size / 1024).toFixed(1)} KB
           </Text>
         </div>
-        
+
         <div style={{ display: 'flex', gap: '8px' }}>
           {/* Preview Button */}
           {canPreview && (
-            <div 
+            <div
               onClick={handlePreviewClick}
               style={{
                 width: 32,
@@ -640,21 +640,21 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
               }}
             >
               {isLoading ? (
-                <LoadingOutlined style={{ 
+                <LoadingOutlined style={{
                   color: isOwnMessage ? '#1677ff' : '#8c8c8c',
-                  fontSize: 16 
+                  fontSize: 16
                 }} />
               ) : (
-                <EyeOutlined style={{ 
+                <EyeOutlined style={{
                   color: isOwnMessage ? '#1677ff' : '#8c8c8c',
-                  fontSize: 16 
+                  fontSize: 16
                 }} />
               )}
             </div>
           )}
-          
+
           {/* Download Button */}
-          <div 
+          <div
             onClick={onDownload}
             style={{
               width: 32,
@@ -667,9 +667,9 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
               cursor: 'pointer'
             }}
           >
-            <DownloadOutlined style={{ 
+            <DownloadOutlined style={{
               color: isOwnMessage ? '#ffffff' : '#1677ff',
-              fontSize: 16 
+              fontSize: 16
             }} />
           </div>
         </div>
@@ -726,13 +726,13 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}>
-                  <ExpandOutlined 
+                  <ExpandOutlined
                     onClick={handlePreviewClick}
-                    style={{ 
+                    style={{
                       color: '#fff',
                       fontSize: 24,
                       cursor: 'pointer'
-                    }} 
+                    }}
                   />
                 </div>
               )}
@@ -756,14 +756,14 @@ const FilePreview = ({ attachment, isOwnMessage, onDownload }) => {
 };
 
 // MessageBubble Component
-const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
+const MessageBubble = ({ message, type = 'private', Aichat = false }) => {
   const { user, downloadFile } = useAuth();
   const sender = message.sender;
   const isOwnMessage = sender?.id === user?.id;
 
   const handleDownload = useCallback(async (attachment, e) => {
     if (e) e.stopPropagation();
-    
+
     try {
       const fileData = await downloadFile(attachment.file_path);
 
@@ -781,21 +781,21 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
       console.error('Download failed:', error);
     }
   }, [downloadFile]);
- 
+
   const renderContent = () => {
     const renderAttachmentsGrid = (attachments) => {
       // Calculate grid layout based on number of attachments
       const getGridLayout = (count) => {
         if (count === 1) return { columns: 1, width: '240px' };
         if (count === 2) return { columns: 2, width: '480px' };
-        if (count === 3) return { columns: 2, width: '480px' }; 
-        return { columns: 2, width: '480px' }; 
+        if (count === 3) return { columns: 2, width: '480px' };
+        return { columns: 2, width: '480px' };
       };
-  
+
       const { columns, width } = getGridLayout(attachments.length);
-  
+
       return (
-        <div style={{ 
+        <div style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${columns}, 1fr)`,
           gap: '8px',
@@ -813,12 +813,12 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
         </div>
       );
     };
-  
+
     if (message.message_type === "MULTIPLE") {
       return (
-        <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
           gap: '8px',
           alignItems: isOwnMessage ? 'flex-end' : 'flex-start',
         }}>
@@ -833,21 +833,23 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
               fontSize: 14,
               wordBreak: 'break-word'
             }}>
+              {console.log(message.text_content)}
               <RichContent content={message.text_content} />
+              {/* {message.text_content} */}
             </Text>
           )}
-          
+
           {/* Render attachments in grid */}
           {message.attachments?.length > 0 && renderAttachmentsGrid(message.attachments)}
         </div>
       );
     }
-  
+
     // Handle single attachment messages
     if (message.attachments?.length > 0) {
       return renderAttachmentsGrid(message.attachments);
     }
-  
+
     // Handle text-only messages
     return (
       <Text style={{
@@ -857,21 +859,24 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
         color: isOwnMessage ? '#ffffff' : '#ffffff',
         borderRadius: 16,
         fontSize: 14,
-        wordBreak: 'break-word'
+        wordBreak: 'break-word',
+        wordBreak: 'break-word',
+        whiteSpace: 'pre-wrap'
       }}>
-        <RichContent content={message.text_content} />
+        {/* <RichContent content={message.text_content} /> */}
+        {message.text_content}
       </Text>
     );
   };
 
   return (
     <div style={{
-      textAlign: !isOwnMessage ||Aichat ? 'left' : 'right',
+      textAlign: !isOwnMessage || Aichat ? 'left' : 'right',
       marginBottom: 12,
       padding: '0 12px'
     }}>
       {type === 'group' && !isOwnMessage && (
-        <Text style={{ 
+        <Text style={{
           fontSize: 12,
           color: '#8c8c8c',
           marginLeft: 12,
@@ -881,7 +886,7 @@ const MessageBubble = ({ message, type = 'private' ,Aichat=false}) => {
           {sender?.username || sender?.email}
         </Text>
       )}
-      <div style={{ 
+      <div style={{
         maxWidth: '70%',
         display: 'inline-block',
         position: 'relative'
