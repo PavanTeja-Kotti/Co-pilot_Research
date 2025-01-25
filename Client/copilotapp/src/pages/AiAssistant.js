@@ -39,7 +39,7 @@ const PDFWindow = () => {
 
     const handleFileUpload = (event) => {
         const uploadedFiles = Array.from(event.target.files);
-        const validFiles = uploadedFiles.filter(file => 
+        const validFiles = uploadedFiles.filter(file =>
             file.type === 'application/pdf' || file.type === 'application/zip'
         );
 
@@ -344,7 +344,7 @@ const AiAssistant = () => {
 
     const rowStyle = {
         display: "flex",
-        flex: 1,
+        // flex: 1,
         overflow: "hidden", // Prevent overflow in the main container
         margin: "10px"
     };
@@ -386,11 +386,40 @@ const AiAssistant = () => {
                         </div>
                     </div>
                 </div>
-                <div style={{ flexBasis: '35%', maxWidth: '35%', display: 'flex', flexDirection: 'column' }}>
-                    <div style={boxStyle}>
+                <div style={{ flexBasis: '35%', maxWidth: '35%' }}>
+                    <div style={{
+                        background: "#292929",
+                        border: "1px solid #303030",
+                        borderRadius: "6px",
+                        color: "#e6e6e6",
+                    }}>
                         <h3 style={headingStyle}>Chat</h3>
-                        <div style={contentStyle}>
-                            <AIChat />
+                        <div
+                            style={{
+                                maxHeight: '84vh',
+                                minHeight: '84vh',
+                                overflow: "hidden",
+                                // marginTop: 16,
+                                // background: token.colorBgElevated,
+                                padding: 12,
+                                // borderRadius: token.borderRadiusLG,
+                                display: "flex",
+                                // gap: 12,
+                                // background: "#292929",
+                                // border: "1px solid #303030",
+                                // borderRadius: "6px",
+                                // color: "#e6e6e6",
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div style={{
+                                flex: 1,
+                                background: token.colorBgContainer,
+                                borderRadius: token.borderRadiusLG,
+                                // padding: 16
+                            }}>
+                                <AIChat />
+                            </div>
                         </div>
                     </div>
                 </div>

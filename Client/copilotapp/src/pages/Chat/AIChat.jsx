@@ -23,7 +23,7 @@ const { useToken } = theme;
 // Loading Animation Component
 const LoadingAnimation = () => {
   const { token } = useToken();
-  
+
   return (
     <div className="loading-container">
       <style>
@@ -153,7 +153,7 @@ const LoadingAnimation = () => {
   );
 };
 
-const Chat = ({ uniqueID, paper=null }) => {
+const Chat = ({ uniqueID, paper = null }) => {
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
@@ -167,16 +167,21 @@ const Chat = ({ uniqueID, paper=null }) => {
   const [sessionId, setSessionId] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const { uploadFile, addUploadedFiles } = useAuth();
-
-  console.log("addUploadedFiles: ", addUploadedFiles)
+  const [processedFiles, setProcessedFiles] = useState(new Set()); 
 
   useEffect(() => {
-    addUploadedFiles.map((e)=>handleFileUpload(e))
-}, []);
+    // Check for new files that haven't been processed yet
+    addUploadedFiles.forEach((file) => {
+        if (!processedFiles.has(file.name)) {
+            handleFileUpload(file); // Call the upload function
+            setProcessedFiles((prev) => new Set(prev).add(file.name)); // Mark file as processed
+        }
+    });
+}, [addUploadedFiles]);
 
   // Helper functions for session storage
   const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;
-  
+
   const saveToSessionStorage = (messages, sessionId) => {
     if (!uniqueID || !sessionId) return;
     const key = getStorageKey(uniqueID, sessionId);
@@ -216,12 +221,12 @@ const Chat = ({ uniqueID, paper=null }) => {
     if (data.type === "chat_created") {
       const newSessionId = data.chat_id;
       setSessionId(newSessionId);
-      
+
       const existingChat = loadFromSessionStorage(newSessionId);
       if (existingChat) {
         setMessages(existingChat.messages);
       }
-      
+
       setIsConnected(true);
       setIsLoading(false);
       setIsWaitingForAI(false);
@@ -267,10 +272,10 @@ const Chat = ({ uniqueID, paper=null }) => {
       try {
         setIsLoading(true);
         setIsWaitingForAI(true);
-        
+
         const messageToSend = inputMessage;
         setInputMessage("");
-        
+
         await chatapi.sendAIChatMessage({
           text: messageToSend,
           message_type: "TEXT",
@@ -282,7 +287,7 @@ const Chat = ({ uniqueID, paper=null }) => {
         message.error("Failed to send message");
         setIsLoading(false);
         setIsWaitingForAI(false);
-        
+
         setTimeout(() => {
           inputRef.current?.focus();
         }, 0);
@@ -329,7 +334,7 @@ const Chat = ({ uniqueID, paper=null }) => {
         file: result,
       });
       setInputMessage("");
-    
+
       setTimeout(() => {
         setUploadingFiles((prev) => {
           const next = new Map(prev);
@@ -379,11 +384,11 @@ const Chat = ({ uniqueID, paper=null }) => {
         if (existingSessions.length > 0) {
           const mostRecentSession = existingSessions[0];
           const storedChat = loadFromSessionStorage(mostRecentSession.sessionId);
-          
+
           if (storedChat) {
             setSessionId(storedChat.sessionId);
             setMessages(storedChat.messages);
-            
+
             await chatapi.connectAIChat();
             setIsConnected(true);
             setIsLoading(false);
@@ -506,23 +511,23 @@ const Chat = ({ uniqueID, paper=null }) => {
                 transform: scale(0.95);
               }
             `}
-            </style>
+          </style>
           <List
             dataSource={messages}
             renderItem={(msg) => (
               <div className="message-enter">
-                <MessageBubble 
-                  key={msg.id} 
-                  message={msg} 
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
                   sender={msg.sender}
                 />
               </div>
             )}
           />
           {isLoading && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
               padding: '12px',
               opacity: 0,
               animation: 'fadeIn 0.3s ease-out forwards'
@@ -538,7 +543,8 @@ const Chat = ({ uniqueID, paper=null }) => {
         </div>
 
         <div style={styles.aiChatInput} className="chat-input-container">
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {/* File Upload Button */}
             <Upload
               showUploadList={false}
               beforeUpload={handleFileUpload}
@@ -550,13 +556,16 @@ const Chat = ({ uniqueID, paper=null }) => {
                   backgroundColor: "#1A1A1A",
                   borderColor: "#1A1A1A",
                   color: "#fff",
-                  borderRadius: "20px",
+                  borderRadius: "3px", // Boxy design with minimal rounding
+                  padding: "6px 10px",
+                  height: "32px",
                   transition: "all 0.2s ease",
                 }}
-                className="send-button-active"
                 disabled={!isConnected || isLoading || isWaitingForAI}
               />
             </Upload>
+
+            {/* Input Text Area */}
             <TextArea
               ref={inputRef}
               value={inputMessage}
@@ -568,43 +577,49 @@ const Chat = ({ uniqueID, paper=null }) => {
                 }
               }}
               placeholder={
-                !isConnected 
-                  ? "Connecting..." 
-                  : isWaitingForAI 
-                    ? "Waiting for AI response..." 
-                    : isLoading 
-                      ? "AI is typing..." 
+                !isConnected
+                  ? "Connecting..."
+                  : isWaitingForAI
+                    ? "Waiting for AI response..."
+                    : isLoading
+                      ? "AI is typing..."
                       : "Type a message..."
               }
-              autoSize={{ minRows: 1, maxRows: 4 }}
+              autoSize={false} // Fixed height for boxy design
               style={{
                 flex: 1,
+                height: "32px", // Reduced height for compact design
                 backgroundColor: "#1A1A1A",
                 borderColor: "#1A1A1A",
                 color: "#fff",
-                borderRadius: "20px",
-                resize: "none",
-                padding: "10px 12px",
+                borderRadius: "3px", // Boxy design with minimal rounding
+                padding: "6px 10px",
                 fontSize: "14px",
+                lineHeight: "1.4", // Adjusted line height for compactness
+                resize: "none",
                 transition: "border-color 0.3s ease",
               }}
               disabled={!isConnected || isLoading || isWaitingForAI}
             />
+
+            {/* Send Button */}
             <Button
               type="primary"
-              icon={<SendOutlined />}
               onClick={handleSendMessage}
               style={{
-                height: "auto",
-                borderRadius: "20px",
+                height: "32px", // Match the height of the text area and upload button
+                borderRadius: "3px", // Boxy design with minimal rounding
                 padding: "0 16px",
-                backgroundColor: token.colorPrimary,
-                border: "none",
+                backgroundColor: token.colorPrimary, // Ant Design primary color
+                borderColor: "#1890ff",
+                color: "#fff",
+                fontWeight: "500",
               }}
-              className="send-button-active"
               disabled={!isConnected || isLoading || isWaitingForAI || !inputMessage.trim()}
               loading={isLoading}
-            />
+            >
+              Send
+            </Button>
           </div>
         </div>
       </div>
