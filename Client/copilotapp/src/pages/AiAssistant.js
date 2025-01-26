@@ -1,7 +1,7 @@
-import { Button, List, theme, Input, Typography, message, Checkbox } from "antd";
+import { Button, List, theme, Input, Typography, message, Select } from "antd";
 import React, { useState, useRef, useEffect } from "react";
 import { UploadOutlined, DeleteOutlined, EditOutlined, SaveOutlined, PlusOutlined, BoldOutlined, ItalicOutlined, UnderlineOutlined, OrderedListOutlined, UnorderedListOutlined } from "@ant-design/icons";
-import AIChat from "./Chat/AIChatAssistant";
+import AIChat from "./Chat/AIChat";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Bold from "@tiptap/extension-bold";
@@ -11,7 +11,7 @@ import OrderedList from "@tiptap/extension-ordered-list";
 import ListItem from "@tiptap/extension-list-item";
 import { Picker } from 'emoji-mart';
 import { useAuth } from "../utils/auth";
-import './Chat/PDFWindow.css'; 
+import './Chat/PDFWindow.css';
 import JSZip from 'jszip'; // Import JSZip for unzipping files
 // import 'emoji-mart/css/emoji-mart.css';
 // import Underline from "./extensions/Underline"; 
@@ -19,6 +19,8 @@ import JSZip from 'jszip'; // Import JSZip for unzipping files
 
 const { useToken } = theme;
 const { TextArea } = Input;
+const { Option } = Select;
+const { Text } = Typography;
 
 const EmojiPicker = ({ onSelect }) => {
     return (
@@ -35,8 +37,8 @@ const PDFWindow = () => {
     const [searchWeb, setSearchWeb] = useState(false); // State for checkbox
     const { SetaddUploadedFiles } = useAuth(); // Get the function to add uploaded files
     const fileInputRef = useRef(null); // Create a ref for the file input
-    const [isHovered, setIsHovered] = useState(false); // State for main container hover
     const [hoveredItemIndex, setHoveredItemIndex] = useState(null); // 
+    const [selectedAgent, setSelectedAgent] = useState(null);
 
     const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
@@ -121,6 +123,11 @@ const PDFWindow = () => {
         }
     };
 
+    const handleChange = (value) => {
+        setSelectedAgent(value);
+        console.log(`Selected agent: ${value}`);
+    };
+
     return (
         <div className="pdf-window" style={{ padding: "10px", height: "100%" }}>
             <Button
@@ -141,13 +148,13 @@ const PDFWindow = () => {
                 ref={fileInputRef} // Attach ref to the input
             />
 
-<List
+            <List
                 dataSource={files}
                 renderItem={(file, index) => (
-                    <List.Item 
+                    <List.Item
                         style={{
-                            display: "flex", 
-                            justifyContent: "space-between", 
+                            display: "flex",
+                            justifyContent: "space-between",
                             alignItems: "center",
                             backgroundColor: hoveredItemIndex === index ? '#1E1E1E' : '#292929', // Background color for list items with hover effect
                             borderRadius: "4px",
@@ -155,7 +162,7 @@ const PDFWindow = () => {
                             padding: "10px", // Padding inside list items
                             transition: "background-color 0.3s ease",
                         }}
-                        onMouseEnter={() => setHoveredItemIndex(index)} 
+                        onMouseEnter={() => setHoveredItemIndex(index)}
                         onMouseLeave={() => setHoveredItemIndex(null)}
                     >
                         <span style={{ color: '#ffffff', flexGrow: 1 }}>{file.name}</span>
@@ -169,12 +176,16 @@ const PDFWindow = () => {
 
             {/* Checkbox for searching the web */}
             <div style={{ marginTop: "10px" }}>
-                <Checkbox 
-                    checked={searchWeb} 
-                    onChange={(e) => setSearchWeb(e.target.checked)} 
+                <Text strong>Choose the Agent:</Text>
+                <Select
+                    value={selectedAgent}
+                    onChange={handleChange}
+                    style={{ width: '100%', marginTop: '8px' }} // Adjust width and margin
+                    placeholder="Select an agent"
                 >
-                    Do you want to search the web?
-                </Checkbox>
+                    <Option value="webagent">Web Agent</Option>
+                    <Option value="researchagent">Research Agent</Option>
+                </Select>
             </div>
         </div>
     );
@@ -438,7 +449,7 @@ const AiAssistant = () => {
                                 borderRadius: token.borderRadiusLG,
                                 // padding: 16
                             }}>
-                                <AIChat />
+                                <AIChat aiAssistant={true} />
                             </div>
                         </div>
                     </div>

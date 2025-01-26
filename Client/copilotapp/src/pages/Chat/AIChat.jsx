@@ -153,7 +153,7 @@ const LoadingAnimation = () => {
   );
 };
 
-const Chat = ({ uniqueID, paper = null }) => {
+const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
@@ -167,17 +167,17 @@ const Chat = ({ uniqueID, paper = null }) => {
   const [sessionId, setSessionId] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const { uploadFile, addUploadedFiles } = useAuth();
-  const [processedFiles, setProcessedFiles] = useState(new Set()); 
+  const [processedFiles, setProcessedFiles] = useState(new Set());
 
   useEffect(() => {
     // Check for new files that haven't been processed yet
     addUploadedFiles.forEach((file) => {
-        if (!processedFiles.has(file.name)) {
-            handleFileUpload(file); // Call the upload function
-            setProcessedFiles((prev) => new Set(prev).add(file.name)); // Mark file as processed
-        }
+      if (!processedFiles.has(file.name)) {
+        handleFileUpload(file); // Call the upload function
+        setProcessedFiles((prev) => new Set(prev).add(file.name)); // Mark file as processed
+      }
     });
-}, [addUploadedFiles]);
+  }, [addUploadedFiles]);
 
   // Helper functions for session storage
   const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;
@@ -545,12 +545,16 @@ const Chat = ({ uniqueID, paper = null }) => {
         <div style={styles.aiChatInput} className="chat-input-container">
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             {/* File Upload Button */}
+            {console.log("aiAssistant: ", aiAssistant)}
+
             <Upload
               showUploadList={false}
               beforeUpload={handleFileUpload}
               accept="image/*,.pdf,.doc,.docx,.txt"
             >
-              <Button
+              {aiAssistant ? (
+                null
+              ) : <Button
                 icon={<PaperClipOutlined />}
                 style={{
                   backgroundColor: "#1A1A1A",
@@ -562,9 +566,9 @@ const Chat = ({ uniqueID, paper = null }) => {
                   transition: "all 0.2s ease",
                 }}
                 disabled={!isConnected || isLoading || isWaitingForAI}
-              />
+              />}
             </Upload>
-
+            
             {/* Input Text Area */}
             <TextArea
               ref={inputRef}
