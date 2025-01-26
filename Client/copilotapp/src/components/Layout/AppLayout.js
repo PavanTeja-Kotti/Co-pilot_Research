@@ -5,7 +5,8 @@ import {
     HomeOutlined, 
     AppstoreOutlined, 
     LogoutOutlined,
-    BellOutlined 
+    BellOutlined ,
+    BulbOutlined, BulbFilled 
 } from '@ant-design/icons';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
@@ -24,6 +25,15 @@ const AppLayout = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(false);
     const notificationService = api.notifications();
+    const [isDarkMode, setIsDarkMode] = useState(
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
+
+    const toggleTheme = () => {
+        const newMode = !isDarkMode;
+        setIsDarkMode(newMode);
+        window.__themeChange?.(newMode); // This will be defined in App.js
+    };
 
     useEffect(() => {
         fetchNotifications();
@@ -253,6 +263,16 @@ const AppLayout = () => {
                         }
                     ]}
                 />
+
+<Button
+    type="text"
+    icon={isDarkMode ? <BulbOutlined /> : <BulbFilled />}
+    onClick={toggleTheme}
+    style={{ 
+        marginRight: '8px',
+        color: token.colorText
+    }}
+/>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <Dropdown 
