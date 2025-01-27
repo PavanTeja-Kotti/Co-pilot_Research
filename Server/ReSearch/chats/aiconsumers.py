@@ -378,7 +378,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             self.chatbot_instances[user_id] = {}
         
         if session_id not in self.chatbot_instances[user_id]:
-            groq_api_key = "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"  # Make sure to set this in your environment
+            groq_api_key = "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"  # Make sure to set this in your environment
             
             index_path = f'faiss_index_{user_id}_{session_id}'
             
@@ -473,10 +473,9 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                             }
                         )
             elif data["ai_agent"] == 'web_agent':
-                os.environ['GROQ_API_KEY'] =  "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" 
-                # groq_api_key = os.getenv('GROQ_API_KEY') or "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" 
+                print("comming here: ", data)
+                os.environ['GROQ_API_KEY'] =  "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" 
                 user_id = str(self.user.id)
-                # print("API KEY : ", groq_api_key)
                 chat_session = self.active_chats[user_id][session_id]
 
                 # Initialize web agent
@@ -494,11 +493,15 @@ class AIChatConsumer(AsyncWebsocketConsumer):
 
                 # Get response from web agent
                 try:
-                    response_text = await asyncio.to_thread(web_agent.print_response, user_message, stream=False)
-                    
-                    # Save and send AI response from web agent
+                    response_text = await asyncio.to_thread(web_agent.run, user_message, stream=False)
+                    print("+++++++++: ", response_text)
+                    # print(dir(response_text))
+                    output_message = response_text.content
+                    print(output_message)
+                    print("output_message",type(output_message))
+
                     ai_message = await self.save_message({
-                        'text': response_text,
+                        'text': output_message,
                         'message_type': MessageType.AI.value,
                         'content': {}
                     }, session_id, is_ai=True)

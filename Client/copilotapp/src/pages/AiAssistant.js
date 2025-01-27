@@ -173,7 +173,6 @@ const PDFWindow = () => {
         </div>
     );
 };
-// instead of having title and notes we store like [{title: "", notes: ""}, {title: "", notes: ""}]
 
 const NoteTaking = () => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -267,7 +266,7 @@ const NoteTaking = () => {
     if (!editor) return null;
 
     return (
-        <div style={{ padding: "20px", maxWidth: "800px", margin: "auto" }}>
+        <div style={{ padding: "2px", maxWidth: "800px", margin: "auto" }}>
             <Button type="primary" onClick={addNewNote} style={{ marginBottom: "10px", width: '100%' }}>
                 New Note
             </Button>
@@ -351,7 +350,6 @@ const AiAssistant = () => {
 
     const handleChange = (value) => {
         setSelectedAgent(value);
-        console.log(`Selected agent: ${value}`);
     };
 
     const containerStyle = {
@@ -363,8 +361,7 @@ const AiAssistant = () => {
 
     const rowStyle = {
         display: "flex",
-        // flex: 1,
-        overflow: "hidden", // Prevent overflow in the main container
+        overflow: "hidden", 
         margin: "10px"
     };
 
@@ -394,15 +391,28 @@ const AiAssistant = () => {
         overflow: "hidden",
     };
 
-    const headingStylechatbox = {
+    const headingStyleChatbox = {
         margin: "0px 10px",
         borderBottom: "1px solid #37383b",
-        // paddingBottom: "5px",
         color: "white",
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        height: "37px", 
+    };
+
+    const dropdownContainerStyle = {
         display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        height: "37px"
+        alignItems: "center", // Center label and dropdown vertically
+    };
+
+    const agentLabelStyle = {
+        marginRight: '10px', // Increase spacing to the right of the label
+    };
+
+    const selectStyle = {
+        width: '150px', // Set a fixed width for better appearance
+        height: '30px', // Maintain height
     };
 
     return (
@@ -424,14 +434,16 @@ const AiAssistant = () => {
                         color: "#e6e6e6",
 
                     }}>
-                        <div style={headingStylechatbox}>
-                            <h3>Chat</h3>
-                            <div>
-                                <Text strong style={{ marginRight: '8px' }}>Agent:</Text>
+                        <div style={headingStyleChatbox}>
+                            <h3 style={{
+                                color: "white",
+                            }}>Chat</h3>
+                            <div style={dropdownContainerStyle}>
+                                <Text strong style={agentLabelStyle}>Agent:</Text>
                                 <Select
                                     value={selectedAgent} // Use selectedAgent state here
                                     onChange={handleChange}
-                                    style={{ width: '50%', height: '30px', margin: "0px", padding: '0px' }} // Adjust width and margin
+                                    style={selectStyle} // Apply new select styles
                                     placeholder="Select an agent"
                                 >
                                     <Option value="web_agent">Web</Option>
@@ -444,27 +456,17 @@ const AiAssistant = () => {
                                 maxHeight: '84vh',
                                 minHeight: '84vh',
                                 overflow: "hidden",
-                                // marginTop: 16,
-                                // background: token.colorBgElevated,
                                 padding: 12,
-                                // borderRadius: token.borderRadiusLG,
                                 display: "flex",
-                                // gap: 12,
-                                // background: "#292929",
-                                // border: "1px solid #303030",
-                                // borderRadius: "6px",
-                                // color: "#e6e6e6",
                             }}
                             onClick={(e) => e.stopPropagation()}
                         >
-
                             <div style={{
                                 flex: 1,
                                 background: token.colorBgContainer,
                                 borderRadius: token.borderRadiusLG,
-                                // padding: 16
                             }}>
-                                <AIChat aiAssistant={true} aiAgent={selectedAgent}/>
+                                <AIChat aiAssistant={true} aiAgent={selectedAgent} />
                             </div>
                         </div>
                     </div>

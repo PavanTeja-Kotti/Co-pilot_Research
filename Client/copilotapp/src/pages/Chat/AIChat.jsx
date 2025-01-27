@@ -154,7 +154,6 @@ const LoadingAnimation = () => {
 };
 
 const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"}) => {
-  console.log("Agent: ", aiAgent)
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);

@@ -329,7 +329,6 @@ class GroqClient:
         
 
     def answer_question(self, question: str, context: str, history_context: str,flag:bool=False) -> str:
-        print("question: ------------->>>>>>>>>>>>>> ", question)
         """Generate answer using Groq API."""
         if(flag):
             response = self.client.chat.completions.create(
@@ -359,7 +358,7 @@ class GroqClient:
          
             """
             }],
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
         )
         else :
             response = self.client.chat.completions.create(
@@ -393,7 +392,7 @@ class GroqClient:
             
                 """
                 }],
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
             )
         return response.choices[0].message.content
 
@@ -526,15 +525,11 @@ class PDFChatbot:
         if self.table_vector_store.vector_store:
             table_docs = self.table_vector_store.similarity_search(question, k=k)
         
-       
-        
         combined_context = " ".join([doc.page_content for doc in text_docs + table_docs])
         # print("Question: question: ------------>>>>>>><<<<<<<<<>>>>>>>><<<<<: ", question, combined_context)
 
-
         if not combined_context:
             answer = self.groq_client.answer_question(question, "", "",group)
-        
 
         # Combine history context
         history_context = " ".join([f"Q: {h.question}\nA: {h.answer}" for h in self.chat_history])
