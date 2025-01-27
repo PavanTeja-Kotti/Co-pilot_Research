@@ -33,6 +33,9 @@ from django.db import models
 from . import middleware
 from . import pdfchatBot
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 
@@ -169,7 +172,7 @@ class GroupChatConsumer(BaseChatConsumer):
     async def get_or_create_chatbot(self, group_id):
         """Get existing chatbot instance or create a new one."""
         chatbot = self._cache_manager.get(group_id)
-        groq_api_key = os.getenv('GROQ_API_KEY') or "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"  # Make sure to set this in your environment
+        groq_api_key = os.getenv('GROQ_API_KEY')  # Make sure to set this in your environment
         
         if not chatbot:
             # Offload blocking PDFChatbot initialization to a thread

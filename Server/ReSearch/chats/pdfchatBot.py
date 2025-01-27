@@ -26,6 +26,9 @@ import faiss
 import base64
 import json
 from django.conf import settings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 unique_id = ""
@@ -597,7 +600,7 @@ class PDFChatbot:
 def main():
     # Initialize chatbot with your Groq API key
     chatbot = PDFChatbot(
-        groq_api_key="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",
+        groq_api_key=    os.getenv('GROQ_API_KEY') ,
         index_path='faiss_index'
     )
 
