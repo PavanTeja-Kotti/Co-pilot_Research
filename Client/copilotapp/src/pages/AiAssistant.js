@@ -16,7 +16,6 @@ import JSZip from 'jszip'; // Import JSZip for unzipping files
 // import 'emoji-mart/css/emoji-mart.css';
 // import Underline from "./extensions/Underline"; 
 
-
 const { useToken } = theme;
 const { TextArea } = Input;
 const { Option } = Select;
@@ -38,7 +37,6 @@ const PDFWindow = () => {
     const { SetaddUploadedFiles } = useAuth(); // Get the function to add uploaded files
     const fileInputRef = useRef(null); // Create a ref for the file input
     const [hoveredItemIndex, setHoveredItemIndex] = useState(null); // 
-    const [selectedAgent, setSelectedAgent] = useState(null);
 
     const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
@@ -123,13 +121,9 @@ const PDFWindow = () => {
         }
     };
 
-    const handleChange = (value) => {
-        setSelectedAgent(value);
-        console.log(`Selected agent: ${value}`);
-    };
-
     return (
-        <div className="pdf-window" style={{ padding: "10px", height: "100%" }}>
+        <div className="pdf-window" style={{ padding: "2px", height: "100%" }}>
+
             <Button
                 type="primary"
                 onClick={handleOpenFileInput} // Open file input directly
@@ -175,22 +169,10 @@ const PDFWindow = () => {
             />
 
             {/* Checkbox for searching the web */}
-            <div style={{ marginTop: "10px" }}>
-                <Text strong>Choose the Agent:</Text>
-                <Select
-                    value={selectedAgent}
-                    onChange={handleChange}
-                    style={{ width: '100%', marginTop: '8px' }} // Adjust width and margin
-                    placeholder="Select an agent"
-                >
-                    <Option value="webagent">Web Agent</Option>
-                    <Option value="researchagent">Research Agent</Option>
-                </Select>
-            </div>
+
         </div>
     );
 };
-
 // instead of having title and notes we store like [{title: "", notes: ""}, {title: "", notes: ""}]
 
 const NoteTaking = () => {
@@ -365,6 +347,12 @@ const NoteTaking = () => {
 
 const AiAssistant = () => {
     const { token } = useToken();
+    const [selectedAgent, setSelectedAgent] = useState("pdf_agent");
+
+    const handleChange = (value) => {
+        setSelectedAgent(value);
+        console.log(`Selected agent: ${value}`);
+    };
 
     const containerStyle = {
         height: "92vh",
@@ -406,6 +394,17 @@ const AiAssistant = () => {
         overflow: "hidden",
     };
 
+    const headingStylechatbox = {
+        margin: "0px 10px",
+        borderBottom: "1px solid #37383b",
+        // paddingBottom: "5px",
+        color: "white",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        height: "37px"
+    };
+
     return (
         <div style={containerStyle}>
             <div style={rowStyle}>
@@ -423,8 +422,23 @@ const AiAssistant = () => {
                         border: "1px solid #303030",
                         borderRadius: "6px",
                         color: "#e6e6e6",
+
                     }}>
-                        <h3 style={headingStyle}>Chat</h3>
+                        <div style={headingStylechatbox}>
+                            <h3>Chat</h3>
+                            <div>
+                                <Text strong style={{ marginRight: '8px' }}>Agent:</Text>
+                                <Select
+                                    value={selectedAgent} // Use selectedAgent state here
+                                    onChange={handleChange}
+                                    style={{ width: '50%', height: '30px', margin: "0px", padding: '0px' }} // Adjust width and margin
+                                    placeholder="Select an agent"
+                                >
+                                    <Option value="web_agent">Web</Option>
+                                    <Option value="pdf_agent">PDF</Option>
+                                </Select>
+                            </div>
+                        </div>
                         <div
                             style={{
                                 maxHeight: '84vh',
@@ -443,13 +457,14 @@ const AiAssistant = () => {
                             }}
                             onClick={(e) => e.stopPropagation()}
                         >
+
                             <div style={{
                                 flex: 1,
                                 background: token.colorBgContainer,
                                 borderRadius: token.borderRadiusLG,
                                 // padding: 16
                             }}>
-                                <AIChat aiAssistant={true} />
+                                <AIChat aiAssistant={true} aiAgent={selectedAgent}/>
                             </div>
                         </div>
                     </div>

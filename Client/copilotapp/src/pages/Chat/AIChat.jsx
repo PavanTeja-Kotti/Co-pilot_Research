@@ -153,7 +153,8 @@ const LoadingAnimation = () => {
   );
 };
 
-const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
+const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"}) => {
+  console.log("Agent: ", aiAgent)
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
@@ -247,6 +248,7 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
           receipts: msg.receipts || [],
           metadata: msg.metadata || {},
           session_id: currentSessionId,
+          agent_type: msg.ai_agent || aiAgent
         });
       }
 
@@ -281,6 +283,7 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
           message_type: "TEXT",
           content: {},
           session_id: sessionId,
+          ai_agent: aiAgent
         });
       } catch (error) {
         console.error("Failed to send message:", error);
@@ -332,6 +335,7 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
         content: {},
         session_id: sessionId,
         file: result,
+        ai_agent: aiAgent
       });
       setInputMessage("");
 
@@ -401,6 +405,7 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
           text: "Hello AI!",
           message_type: "TEXT",
           content: {},
+          ai_agent: aiAgent,
           file: paper ? {
             "message": "File uploaded successfully",
             "path": paper.pdf_url,
@@ -545,7 +550,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
         <div style={styles.aiChatInput} className="chat-input-container">
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             {/* File Upload Button */}
-            {console.log("aiAssistant: ", aiAssistant)}
 
             <Upload
               showUploadList={false}
@@ -568,7 +572,7 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
                 disabled={!isConnected || isLoading || isWaitingForAI}
               />}
             </Upload>
-            
+
             {/* Input Text Area */}
             <TextArea
               ref={inputRef}
