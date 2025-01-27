@@ -955,7 +955,6 @@ def summarization_paper(request, pdf_url=None):
 
     return Response({"error": "Invalid request method"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
-
 import numpy as np
 import faiss
 from typing import List, Dict, Tuple

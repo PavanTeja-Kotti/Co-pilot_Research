@@ -1,0 +1,17 @@
+.pdf-window {
+    /* background-color: #f0f0f0; Background color for the main container */
+    border-radius: 8px; /* Optional rounded corners */
+    transition: background-color 0.3s ease; /* Smooth transition for hover */
+}
+
+.list-item {
+    background-color: #443d3d; /* Background color for list items */
+    border-radius: 6px; /* Optional rounded corners for list items */
+    transition: background-color 0.3s ease; /* Smooth transition for hover */
+    padding: 8px;
+    border: 1px solid #444444,
+}
+
+.list-item:hover {
+    background-color: #241e1e; /* Highlight color on hover for list items */
+}

@@ -258,7 +258,7 @@ const AppLayout = () => {
                         {
                             key: '/summarization',
                             icon: <AppstoreOutlined />,
-                            label: <Link to="/summarization">summarization</Link>
+                            label: <Link to="/summarization">Summarization</Link>
                         },
                         {
                             key: '/AIassistant',
