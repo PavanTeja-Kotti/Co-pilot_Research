@@ -13,6 +13,7 @@ import { useAuth } from '../../utils/auth';
 import api from '../../utils/api';
 import ChatUiButton from '../../pages/ChatUiButton';
 import Logo from '../../asset/HeaderLogo';
+import { pad, transform } from 'lodash';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -75,7 +76,10 @@ const AppLayout = () => {
         display: 'flex',
         alignItems: 'center',
         gap: '16px',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        // marginLeft: '-19px',
+        transform: 'scale(1.3)',
+        paddingLeft: '4px',
     };
 
     const menuStyle = {
@@ -221,7 +225,7 @@ const AppLayout = () => {
     return (
         <Layout style={{ minHeight: '100vh', background: token.colorBgContainer }}>
             <Header style={headerStyle}>
-                <Link to="/" style={logoStyle}>
+                <Link to="/"   style={logoStyle}>
                     <Logo></Logo>
                    
                     <Title 
