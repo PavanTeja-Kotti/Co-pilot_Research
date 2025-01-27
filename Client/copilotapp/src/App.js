@@ -33,28 +33,38 @@ const PublicRoute = ({ children }) => {
 const App = () => {
   const [isDarkMode, setIsDarkMode] = useState(
     window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
+);
 
-  useEffect(() => {
+useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e) => setIsDarkMode(e.matches);
     mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+    
+    // Add global theme change handler
+    window.__themeChange = (darkMode) => {
+        setIsDarkMode(darkMode);
+    };
 
+    return () => {
+        mediaQuery.removeEventListener('change', handleChange);
+        delete window.__themeChange;
+    };
+}, []);
+
+const themeConfig = {
+    algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    token: {
+        colorPrimary: '#1677ff',
+        borderRadius: 8,
+    },
+};
   useEffect(() => {
     return () => {
       // chatapi.destroy();
     };
   }, []);
 
-  const themeConfig = {
-    algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-    token: {
-      colorPrimary: '#1677ff',
-      borderRadius: 8,
-    },
-  };
+
 
   return (
     <ConfigProvider theme={themeConfig}>
