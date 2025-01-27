@@ -218,6 +218,8 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
   };
 
   const handleAIChatMessage = useCallback((data) => {
+   
+
     if (data.type === "chat_created") {
       const newSessionId = data.chat_id;
       setSessionId(newSessionId);
@@ -231,6 +233,13 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
       setIsLoading(false);
       setIsWaitingForAI(false);
     } else if (data.type === "message") {
+      
+      
+      if (sessionId && sessionId !== data.session_id) {
+        return;
+      }
+      
+
       const msg = data.message;
       const currentSessionId = data.session_id || sessionId;
 
@@ -268,6 +277,8 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false }) => {
   }, [uniqueID, sessionId, addMessage]);
 
   const handleSendMessage = async () => {
+
+
     if (inputMessage.trim() && isConnected && !isLoading && !isWaitingForAI) {
       try {
         setIsLoading(true);

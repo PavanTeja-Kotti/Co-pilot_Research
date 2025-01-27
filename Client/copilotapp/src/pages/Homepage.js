@@ -211,7 +211,7 @@ const Dashboard = () => {
               </Text>
               <Text style={{ color: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <StarOutlined />
-                {paper.citation_count || 0}
+                {paper.active_bookmarks_count || 0}
               </Text>
             </div>
           </div>
@@ -234,7 +234,7 @@ const Dashboard = () => {
               <Title level={5} style={{ color: token.colorText, margin: 0 }}>Reading Activity</Title>
               <Text style={{ color: token.colorTextSecondary }}>Papers read over time</Text>
             </div>
-            <div style={{ height: 325 }}>
+            <div style={{ height: 308 }}>
               <ResponsiveContainer>
                 <LineChart data={readingData}>
                   <XAxis dataKey="month" stroke={token.colorTextSecondary} />
@@ -288,31 +288,36 @@ const Dashboard = () => {
             <div style={{ marginBottom: '20px' }}>
               <Title level={5} style={{ color: token.colorText, margin: 0 }}>Recommended</Title>
             </div>
-            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+            <Space direction="vertical" style={{ width: '100%' ,height:"330px",overflowY:"auto",
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+
+            }}size={8}>
+
               {recommendations.map((paper, index) => (
                 <div key={index} style={styles.paperCard}>
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <Text style={{ color: token.colorText, fontWeight: 500, flex: 1, marginRight: '8px' }}>
-                        {paper.title}
+                        {paper.title.length > 50 ? `${paper.title.substring(0, 50)}...` : paper.title}
                       </Text>
                       <Tag style={{ background: token.colorSuccessBg, color: token.colorSuccess, margin: 0, border: 'none' }}>
-                        {paper.relevance}%
+                        {paper.relevance||'0'}%
                       </Tag>
                     </div>
                     <Text style={{ color: token.colorTextSecondary, display: 'block' }}>
-                      {paper.authors}
+                      {paper.authors.join(', ').length > 30 ? `${paper.authors.join(', ').substring(0, 30)}...` : paper.authors.join(', ')}
                     </Text>
                   </div>
                   <Text style={{ color: token.colorTextSecondary, fontSize: '12px', display: 'block', marginBottom: '12px' }}>
-                    {paper.reason}
+                    {paper.reason||'No reason provided'}
                   </Text>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Tag style={{ ...styles.tagBase, ...styles.sourceTag }}>
-                      {paper.conference}
+                      {paper.source}
                     </Tag>
                     <Text style={{ fontSize: '12px', color: token.colorTextSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <StarOutlined /> {paper.citations} citations
+                      <StarOutlined /> {paper.citations||'200'} citations
                     </Text>
                   </div>
                 </div>
@@ -424,13 +429,17 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [readingResponse, statsResponse, researchfocus] = await Promise.all([
+        const [readingResponse, statsResponse, researchfocus,recommendations] = await Promise.all([
           api.scraping().readingstats(),
           api.scraping().statsdata(),
-          api.scraping().getresearchfocus()
+          api.scraping().getresearchfocus(),
+          api.scraping().getPapers(
+            0,
+            10,
+          )
         ]);
-  
-        console.log('Stats Response:', statsResponse);  // Add this line
+
+      
   
         setState(prev => ({
           ...prev,
@@ -439,24 +448,7 @@ const Dashboard = () => {
             ...prev.data,
             readingData: readingResponse.data,
             statsData: statsResponse.data || [], // Add fallback empty array
-            recommendations: [
-              {
-                title: "Emergent Abilities of Large Language Models",
-                relevance: 98,
-                reason: "Matches your interest in LLM scaling",
-                citations: 1840,
-                authors: "Wei, J., et al.",
-                conference: "ACL 2024"
-              },
-              {
-                title: "Transformer Evolution: A Study",
-                relevance: 96,
-                reason: "Related to your recent readings",
-                citations: 1256,
-                authors: "Anderson, M., et al.",
-                conference: "ICLR 2024"
-              }
-            ],
+            recommendations: recommendations.data.results || [],
             topicDistribution: researchfocus.data
           }
         }));
