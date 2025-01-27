@@ -1,4 +1,5 @@
 
+import json
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -29,6 +30,13 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Count, Avg
 from django.db.models.functions import TruncMonth, ExtractMonth, Lower
+from django.db.models import Prefetch, Func, F
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+import faiss
+from collections import defaultdict
+from functools import lru_cache
+from typing import List, Dict, Set
 
 
 @api_view(['GET'])
@@ -213,7 +221,9 @@ def apply_filters(queryset, request):
     # Categories filter (JSON field)
     if category := request.query_params.get('category'):
         # Search for the category name in the JSON array
-        queryset = queryset.filter(categories__contains=[category])
+        category_filters = Q()
+        category_filters |= Q(categories__icontains=category)
+        queryset = queryset.filter(category_filters)
     
     # Bookmark filter (if user is authenticated)
     if request.user.is_authenticated:
@@ -269,77 +279,78 @@ def research_paper_list_withPage(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 def apply_dynamic_filters(queryset, request):
     filters = {}
-    
-    title = request.query_params.get('title')
-    source = request.query_params.get('source')
-    category = request.query_params.get('category')
-    date_from = request.query_params.get('date_from')
-    date_to = request.query_params.get('date_to')
-    is_active = request.query_params.get('is_active')
-    user = request.query_params.get('user')
-    sort = request.query_params.get('sort')
-    search= request.query_params.get('search')
-    print("Search: ", search)
-    
+    params = request.query_params
     model_name = queryset.model.__name__
 
     if model_name == 'ResearchPaper':
-        if search:
+        if params.get('search'):
             queryset = queryset.filter(
-                Q(title__icontains=search) |
-                Q(abstract__icontains=search) |
-                Q(authors__icontains=search)
+                Q(title__icontains=params['search']) |
+                Q(abstract__icontains=params['search']) |
+                Q(authors__icontains=params['search'])
             )
         
-        if title:
-            filters['title__icontains'] = title
-        if source:
-            filters['source'] = source
-        if category:
-            filters['categories__contains'] = [category]
-        if date_from:
-            filters['publication_date__gte'] = date_from
-        if date_to:
-            filters['publication_date__lte'] = date_to
+        # Basic filters
+        if params.get('title'):
+            filters['title__icontains'] = params['title']
+        if params.get('source'):
+            filters['source'] = params['source']
+            
+        # Category filter with case-insensitive JSON handling
+        if params.get('category'):
+            category = params['category']
+            categories = [category] if isinstance(category, str) else category
+            q_objects = Q()
+            for cat in categories:
+                q_objects |= Q(categories__contains=f'"{cat}"')
+            queryset = queryset.filter(q_objects)
+                
+        # Date filters
+        if params.get('date_from'):
+            filters['publication_date__gte'] = params['date_from']
+        if params.get('date_to'):
+            filters['publication_date__lte'] = params['date_to']
             
     elif model_name in ['BookmarkedPaper', 'ReadPaper', 'CategoryLike']:
-
-        if search:
+        if params.get('search'):
             queryset = queryset.filter(
-                Q(paper__title__icontains=search) |
-                Q(paper__abstract__icontains=search) |
-                Q(paper__authors__icontains=search)
+                Q(paper__title__icontains=params['search']) |
+                Q(paper__abstract__icontains=params['search']) |
+                Q(paper__authors__icontains=params['search'])
             )
 
-        if user:
-            filters['user_id'] = user
-        if is_active is not None:
-            filters['is_active'] = is_active == 'True'
-        if date_from:
-            date_field = 'bookmarked_at' if model_name == 'BookmarkedPaper' else 'read_at' if model_name == 'ReadPaper' else 'created_at'
-            filters[f'{date_field}__gte'] = date_from
-        if date_to:
-            date_field = 'bookmarked_at' if model_name == 'BookmarkedPaper' else 'read_at' if model_name == 'ReadPaper' else 'created_at'
-            filters[f'{date_field}__lte'] = date_to
+        if params.get('user'):
+            filters['user_id'] = params['user']
+        if params.get('is_active') is not None:
+            filters['is_active'] = params['is_active'] == 'True'
+            
+        # Date field handling
+        date_field = {
+            'BookmarkedPaper': 'bookmarked_at',
+            'ReadPaper': 'read_at',
+            'CategoryLike': 'created_at'
+        }.get(model_name)
+        
+        if params.get('date_from'):
+            filters[f'{date_field}__gte'] = params['date_from']
+        if params.get('date_to'):
+            filters[f'{date_field}__lte'] = params['date_to']
             
     elif model_name == 'ResearchPaperCategory':
-        if title:
-            filters['name__icontains'] = title
+        if params.get('title'):
+            filters['name__icontains'] = params['title']
 
-    # Apply filters to queryset
+    # Apply remaining filters and sorting
     queryset = queryset.filter(**filters)
     
-    # Apply sorting
-    if sort:
-        sort_field = sort.lstrip('-')
+    if params.get('sort'):
+        sort_field = params['sort'].lstrip('-')
         if hasattr(queryset.model, sort_field):
-            queryset = queryset.order_by(sort)
+            queryset = queryset.order_by(params['sort'])
             
     return queryset
-    
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
@@ -929,7 +940,8 @@ def summarization_paper(request, pdf_url=None):
             return Response({"error": "Research paper not found"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            summary = summarize_pdf(pdf_url)  # This function should handle the summarization
+            # summary = summarize_pdf(pdf_url)  # This function should handle the summarization
+            pass
         except Exception as e:
             return Response({"error": f"Summarization failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -944,92 +956,301 @@ def summarization_paper(request, pdf_url=None):
 
     return Response({"error": "Invalid request method"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+
+import numpy as np
+import faiss
+from typing import List, Dict, Tuple
+from collections import defaultdict
+import math
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from django.db.models import Q, Count, F, Prefetch
+from django.core.cache import cache
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+from functools import reduce
+import operator
+CHUNK_SIZE = 2000
+CACHE_TIMEOUT = 86400  # 24 hours
+INDEX_DIMENSIONS = 200
+MIN_INTERACTIONS = 5
+MAX_WORKERS = 4
+
 def process_categories(categories):
-    if isinstance(categories, str):  # If it's a string (e.g., "['AI', 'Machine Learning']")
-        categories = eval(categories)  # Convert string to a list
-    if isinstance(categories, list):  # If it's a list
-        return ', '.join([cat.strip().lower() for cat in categories])
-    return ''  # Default to an empty string if neither
+    if not categories:
+        return ''
+    try:
+        return ','.join(str(cat).strip().lower() for cat in categories)
+    except:
+        return ''
 
-def chunked_queryset(queryset, ids, chunk_size=900):
-    """
-    Breaks down a large list of IDs into smaller chunks to avoid exceeding SQLite's variable limit.
-    """
-    chunks = [ids[i:i + chunk_size] for i in range(0, len(ids), chunk_size)]
-    q_objects = Q()
-    for chunk in chunks:
-        q_objects |= Q(id__in=chunk)
-    return queryset.filter(q_objects)
+def chunks(queryset, size):
+    """Process queryset in chunks"""
+    start = 0
+    while True:
+        chunk = list(queryset[start:start + size])
+        if not chunk:
+            break
+        yield chunk
+        start += size
 
-@api_view(['GET', 'POST'])
+class PaperIndexManager:
+    def __init__(self):
+        self.index = None
+        self.paper_ids = []
+        self.vectorizer = None
+        self.load_from_cache()
+    
+    def load_from_cache(self):
+        try:
+            cached_data = cache.get('paper_index_data')
+            if cached_data and isinstance(cached_data, dict):
+                self.index = cached_data.get('index')
+                self.paper_ids = cached_data.get('paper_ids', [])
+                self.vectorizer = cached_data.get('vectorizer')
+        except Exception as e:
+            print(f"Cache loading error: {str(e)}")
+    
+    def save_to_cache(self):
+        try:
+            if self.index and self.vectorizer:
+                cache.set('paper_index_data', {
+                    'index': self.index,
+                    'paper_ids': self.paper_ids,
+                    'vectorizer': self.vectorizer
+                }, CACHE_TIMEOUT)
+        except Exception as e:
+            print(f"Cache saving error: {str(e)}")
+
+    def build_vectors(self, papers: List[Dict]) -> np.ndarray:
+        texts = [
+            f"{str(p.get('title', '')).lower()} {str(p.get('abstract', '')).lower()} "
+            f"{process_categories(p.get('categories', []))} "
+            f"{' '.join(str(author).lower() for author in p.get('authors', []))}"
+            for p in papers
+        ]
+        
+        try:
+            if not self.vectorizer:
+                self.vectorizer = TfidfVectorizer(
+                    max_features=INDEX_DIMENSIONS,
+                    stop_words='english',
+                    ngram_range=(1, 3),
+                    lowercase=True
+                )
+                vectors = self.vectorizer.fit_transform(texts).toarray()
+            else:
+                vectors = self.vectorizer.transform(texts).toarray()
+                
+            vectors = vectors.astype('float32')
+            faiss.normalize_L2(vectors)
+            return vectors
+        except Exception as e:
+            print(f"Vector building error: {str(e)}")
+            raise
+
+    def build_index(self, papers: List[Dict]):
+        try:
+            if not self.index:
+                self.index = faiss.IndexFlatIP(INDEX_DIMENSIONS)
+                self.paper_ids = []
+            
+            for i in range(0, len(papers), CHUNK_SIZE):
+                chunk = papers[i:i + CHUNK_SIZE]
+                vectors = self.build_vectors(chunk)
+                self.index.add(vectors)
+                self.paper_ids.extend(str(p.get('id')) for p in chunk)
+            
+            self.save_to_cache()
+        except Exception as e:
+            print(f"Index building error: {str(e)}")
+
+def get_enhanced_content_recommendations(user_id: str) -> List[str]:
+    index_manager = PaperIndexManager()
+    
+    try:
+        # Get user interactions
+        user_papers = ResearchPaper.objects.filter(
+            Q(paper_bookmarks__user_id=user_id, paper_bookmarks__is_active=True) |
+            Q(paper_readers__user_id=user_id, paper_readers__is_active=True)
+        ).distinct()
+        
+        liked_categories = list(CategoryLike.objects.filter(
+            user_id=user_id, 
+            is_active=True
+        ).values_list('category__name', flat=True))
+        
+        # Build user profile
+        user_interests = defaultdict(float)
+        user_keywords = defaultdict(float)
+        user_authors = set()
+        
+        for paper in user_papers:
+            text = f"{paper.title} {paper.abstract}"
+            words = set(word.lower() for word in text.split() if len(word) > 3)
+            user_keywords.update({word: user_keywords.get(word, 0) + 1 for word in words})
+            
+            for category in paper.categories:
+                user_interests[category.lower()] += 0.4
+            user_authors.update(paper.authors)
+        
+        for category in liked_categories:
+            user_interests[category.lower()] += 0.6
+        
+        # Get unexplored categories
+        all_categories = set(
+            cat.lower() 
+            for cats in ResearchPaper.objects.values_list('categories', flat=True)
+            for cat in cats if cats
+        )
+        unexplored_categories = all_categories - set(user_interests.keys())
+        
+        # Initialize vectorizer if needed
+        if not index_manager.index or not index_manager.vectorizer:
+            papers = list(ResearchPaper.objects.values('id', 'title', 'abstract', 'categories', 'authors'))
+            if papers:
+                index_manager.build_index(papers)
+        
+        # Process recommendations
+        paper_scores = []
+        seen_papers = {str(p.id) for p in user_papers}
+        
+        for papers in chunks(ResearchPaper.objects.exclude(id__in=seen_papers), 1000):
+            for paper in papers:
+                # Calculate interest-based score (70%)
+                interest_score = calculate_interest_score(
+                    paper, user_interests, user_keywords, 
+                    user_authors, index_manager
+                )
+                
+                # Calculate diversity score (30%)
+                diversity_score = calculate_diversity_score(
+                    paper, unexplored_categories
+                )
+                
+                final_score = (interest_score * 0.7) + (diversity_score * 0.3)
+                if final_score > 0:
+                    paper_scores.append((str(paper.id), final_score))
+        
+        # Sort recommendations
+        return [pid for pid, _ in sorted(paper_scores, key=lambda x: x[1], reverse=True)]
+        
+    except Exception as e:
+        print(f"Recommendation error: {str(e)}")
+        return []
+
+def calculate_interest_score(paper, user_interests, user_keywords, user_authors, index_manager):
+    score = 0
+    
+    # Category match (30%)
+    paper_categories = [cat.lower() for cat in paper.categories]
+    category_score = sum(user_interests.get(cat, 0) for cat in paper_categories)
+    score += category_score * 0.3
+    
+    # Keyword similarity (25%)
+    text = f"{paper.title.lower()} {paper.abstract.lower()}"
+    words = set(word for word in text.split() if len(word) > 3)
+    keyword_score = sum(user_keywords.get(word, 0) for word in words) / (len(words) or 1)
+    score += keyword_score * 0.25
+    
+    # Content similarity (25%)
+    if str(paper.id) in index_manager.paper_ids:
+        try:
+            idx = index_manager.paper_ids.index(str(paper.id))
+            similarity_score = index_manager.index.reconstruct(idx).mean()
+            score += similarity_score * 0.25
+        except:
+            pass
+    
+    # Citation impact (10%)
+    citation_score = min(math.log(paper.citation_count + 1) / 10, 1) if paper.citation_count else 0
+    score += citation_score * 0.1
+    
+    # Recency (10%)
+    days_old = (datetime.now().date() - paper.publication_date).days
+    recency_score = math.exp(-days_old / 365) if days_old >= 0 else 0
+    score += recency_score * 0.1
+    
+    # Author overlap bonus
+    if any(author in paper.authors for author in user_authors):
+        score *= 1.2
+        
+    return score
+
+def calculate_diversity_score(paper, unexplored_categories):
+    paper_categories = set(cat.lower() for cat in paper.categories)
+    unexplored_matches = len(paper_categories & unexplored_categories)
+    
+    if unexplored_matches:
+        citation_weight = min(math.log(paper.citation_count + 1) / 10, 1) if paper.citation_count else 0.1
+        return (unexplored_matches / len(paper_categories)) * citation_weight
+    return 0
+
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def recommendation_paper(request):
     if not request.user.is_authenticated:
-        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(
+            {'error': 'Authentication required'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
-    # Fetch read paper IDs and user interests with efficient querying
-    read_paper_ids = list(ReadPaper.objects.filter(user=request.user).values_list('paper_id', flat=True))
-    user_interests = list(CategoryLike.objects.filter(user=request.user, is_active=True).values_list('category__name', flat=True))
-
-    # Normalize user interests
-    normalized_interests = [interest.strip().lower() for interest in user_interests]
-
-    # Use cache to store recommendations for faster retrieval
+    search_query = request.GET.get('search', '').strip().lower()
+    categories = [cat.lower() for cat in request.GET.getlist('categories', [])]
+    
     cache_key = f'recommendations_{request.user.id}'
-    recommendations = cache.get(cache_key)
+    recommended_ids = cache.get(cache_key)
+    
+    if recommended_ids is None:
+        recommended_ids = get_enhanced_content_recommendations(str(request.user.id))
+        if recommended_ids:
+            cache.set(cache_key, recommended_ids, CACHE_TIMEOUT)
+    
+    if not recommended_ids:
+        return Response([])
 
-    if recommendations is None:
-        # Fetch all research papers with only necessary fields
-        queryset = ResearchPaper.objects.only('id', 'title', 'abstract', 'categories').all()
-        papers_df = pd.DataFrame(list(queryset.values()))
-
-        # Preprocess categories column
-        papers_df['categories'] = papers_df['categories'].apply(process_categories)
-        papers_df['combined_text'] = papers_df['title'] + ' ' + papers_df['abstract'] + ' ' + papers_df['categories']
-
-        tfidf_vectorizer = TfidfVectorizer()
-        tfidf_matrix = tfidf_vectorizer.fit_transform(papers_df['combined_text'].tolist())
-
-        if not read_paper_ids:
-            # Recommend based on user interests
-            user_profile = ' '.join(normalized_interests)
-            user_profile_tfidf = tfidf_vectorizer.transform([user_profile])
-            cosine_similarities = cosine_similarity(user_profile_tfidf, tfidf_matrix).flatten()
-            papers_df['similarity_score'] = cosine_similarities
-        else:
-            # Recommend based on read papers
-            similarity_scores = cosine_similarity(tfidf_matrix)
-            user_indices = [papers_df[papers_df['id'] == paper_id].index[0] for paper_id in read_paper_ids if not papers_df[papers_df['id'] == paper_id].empty]
-            
-            if not user_indices:
-                return Response({'error': 'No valid papers in user history'}, status=status.HTTP_400_BAD_REQUEST)
-
-            mean_similarity_scores = np.mean(similarity_scores[user_indices], axis=0)
-            papers_df['similarity_score'] = mean_similarity_scores
-
-        # Filter out already read papers and sort by similarity score
-        recommendations = papers_df[~papers_df['id'].isin(read_paper_ids)].sort_values(by='similarity_score', ascending=False).reset_index(drop=True)
-
-        # Cache the recommendations for future requests
-        cache.set(cache_key, recommendations.to_dict(orient='records'), timeout=3600)  # Cache for 1 hour
-
-    else:
-        recommendations = pd.DataFrame(recommendations)
-
-    recommendations_ids = recommendations['id'].tolist()
-
-    # Retrieve objects in the same order as recommendations_ids using an in-memory sort
-    recommendations_queryset = list(ResearchPaper.objects.filter(id__in=recommendations_ids))
-    recommendations_queryset.sort(key=lambda x: recommendations_ids.index(x.id))
-
+    recommendations = ResearchPaper.objects.filter(id__in=recommended_ids)
+    
+    if search_query:
+        recommendations = recommendations.filter(
+            Q(title__icontains=search_query) |
+            Q(abstract__icontains=search_query)
+        )
+    
+    if categories:
+        recommendations = recommendations.filter(
+            reduce(operator.or_, 
+                  [Q(categories__icontains=cat) for cat in categories])
+        )
+    
+    recommendations = recommendations.prefetch_related(
+        Prefetch(
+            'paper_bookmarks',
+            queryset=BookmarkedPaper.objects.filter(
+                user=request.user,
+                is_active=True
+            ),
+            to_attr='user_bookmarks'
+        ),
+        Prefetch(
+            'paper_readers',
+            queryset=ReadPaper.objects.filter(
+                user=request.user,
+                is_active=True
+            ),
+            to_attr='user_reads'
+        )
+    )
+    
+    id_map = {str(id): i for i, id in enumerate(recommended_ids)}
+    recommendations = sorted(
+        recommendations,
+        key=lambda x: id_map.get(str(x.id), float('inf'))
+    )
+    
     paginator = ResearchPaperPagination()
+    page = paginator.paginate_queryset(recommendations, request)
     
-    paginated_queryset = paginator.paginate_queryset(recommendations_queryset, request)
-    
-    serializer = ResearchPaperSerializer(paginated_queryset, many=True, context={'request': request})
-    
-    return paginator.get_paginated_response(serializer.data)
-
-
-def summarize_pdf(pdf_url):
-    return "Summarized text"
+    return paginator.get_paginated_response(
+        ResearchPaperSerializer(page, many=True, context={'request': request}).data
+    )

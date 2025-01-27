@@ -1,5 +1,4 @@
 from datetime import datetime
-import os
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -261,11 +260,7 @@ class VectorStoreManager:
 class GroqClient:
     def __init__(self, api_key: str):
         self.client = Groq(api_key=api_key)
-    
 
-    
-
-    
     def explain_image(self,base64_image):
      
        
@@ -543,13 +538,11 @@ class PDFChatbot:
         if self.table_vector_store.vector_store:
             table_docs = self.table_vector_store.similarity_search(question, k=k)
         
-       
-        
         combined_context = " ".join([doc.page_content for doc in text_docs + table_docs])
+        # print("Question: question: ------------>>>>>>><<<<<<<<<>>>>>>>><<<<<: ", question, combined_context)
 
         if not combined_context:
             answer = self.groq_client.answer_question(question, "", "",group)
-        
 
         # Combine history context
         history_context = " ".join([f"Q: {h.question}\nA: {h.answer}" for h in self.chat_history])
@@ -601,16 +594,12 @@ class PDFChatbot:
             self.pdf_documents = {}
             self.current_pdf_id = None
 
-
 def main():
     # Initialize chatbot with your Groq API key
     chatbot = PDFChatbot(
         groq_api_key="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",
         index_path='faiss_index'
-       
     )
-
-   
 
     try:
         # Test basic conversation
@@ -624,12 +613,9 @@ def main():
         
         print(f"PDF Summary:\n{summary}\n")
 
-
         # Ask questions about the combined content
         print("Asking questions about the combined content:")
-        questions = [
-            
-            
+        questions = [      
             "What is transformer",
             # "Exaplain transformer architecture with image",
             "crow doing",
@@ -640,12 +626,8 @@ def main():
             print(f"Q: {question}")
             print(f"A: {answer}\n")
         
-            
-
-
     except Exception as e:
         print(f"Error: {str(e)}")
-
 
 if __name__ == "__main__":
     main()

@@ -7,7 +7,12 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from enum import Enum
 import uuid
-
+from phi.agent import Agent
+from phi.model.groq import Groq
+from phi.tools.duckduckgo import DuckDuckGo
+#from phi.tools.yfinance import YFinanceTools
+from rich.prompt import Prompt
+import typer
 from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 from dataclasses import dataclass, asdict, field
@@ -135,7 +140,8 @@ class ChatSession:
 
 class AIChatConsumer(AsyncWebsocketConsumer):
     active_chats: Dict[str, Dict[str, Any]] = {}
-    chatbot_instances: Dict[str, Dict[str, pdfchatBot.PDFChatbot]] = {}  # Track PDFChatbot instances per user and session
+    chatbot_instances: Dict[str, Dict[str, pdfchatBot.PDFChatbot]] = {}
+    channel_sessions: Dict[str, Dict[str, str]] = {}  # user_id -> {channel -> session_id}
     
     AI_ASSISTANT = {
         "id": str(uuid.uuid4()),
@@ -160,62 +166,63 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                 await self.close()
                 return
             
-            self.user_channel = f'ai_chat_{self.user.id}'
+            # Create unique channel name
+            unique_id = str(uuid.uuid4())
+            self.user_channel = f'ai_chat_{self.user.id}_{unique_id}'
             
-            if str(self.user.id) not in self.active_chats:
-                self.active_chats[str(self.user.id)] = {}
+            user_id = str(self.user.id)
+            if user_id not in self.channel_sessions:
+                self.channel_sessions[user_id] = {}
+            
+            if user_id not in self.active_chats:
+                self.active_chats[user_id] = {}
             
             await self.channel_layer.group_add(self.user_channel, self.channel_name)
             await self.accept()
-            logger.info(f"User {self.user.id} connected to AI chat")
+            logger.info(f"User {self.user.id} connected to AI chat with channel {self.user_channel}")
             
         except Exception as e:
             logger.error(f"Error in AI chat connect: {str(e)}", exc_info=True)
             await self.close()
 
     async def disconnect(self, close_code):
-        """
-        Handle WebSocket disconnect. Sessions are preserved unless it's a logout.
-        The FAISS indices and chat history remain intact until explicit logout.
-        """
         try:
-            if hasattr(self, 'user_channel'):
+            if hasattr(self, 'user_channel') and hasattr(self, 'user'):
+                user_id = str(self.user.id)
+                
+                # Clean up channel tracking
+                if user_id in self.channel_sessions:
+                    self.channel_sessions[user_id].pop(self.user_channel, None)
+                    if not self.channel_sessions[user_id]:
+                        del self.channel_sessions[user_id]
+                
                 await self.channel_layer.group_discard(
                     self.user_channel,
                     self.channel_name
                 )
                 
-            if hasattr(self, 'user'):
-                # Only log the disconnect, don't clean up sessions
-                logger.info(f"User {self.user.id} disconnected from WebSocket. Sessions preserved.")
+                logger.info(f"User {user_id} disconnected channel {self.user_channel}")
                 
         except Exception as e:
             logger.error(f"Error in disconnect: {str(e)}", exc_info=True)
 
-# Add a new method to handle logout cleanup
     async def cleanup_on_logout(self, event):
-        """
-        Clean up user sessions and FAISS indices on explicit logout.
-        Should be called from your logout view/handler.
-        
-        Args:
-            event: Event data from channel layer
-        """
         try:
-            print("start clean Uo")
             user_id = str(self.user.id)
             if user_id in self.chatbot_instances:
-                # Clean up FAISS indices
                 for session_id, chatbot in self.chatbot_instances[user_id].items():
-                    index_path=os.path.join(settings.BASE_DIR, f'FissIndex/faiss_index_{user_id}_{session_id}')
+                    index_path = os.path.join(settings.BASE_DIR, f'FissIndex/faiss_index_{user_id}_{session_id}')
                     if os.path.exists(index_path):
                         shutil.rmtree(index_path)
                 del self.chatbot_instances[user_id]
-                logger.info(f"User {user_id} sessions cleaned up on logout")
                 
-            # Clean up from active_chats as well
+            if user_id in self.channel_sessions:
+                del self.channel_sessions[user_id]
+                
             if user_id in self.active_chats:
                 del self.active_chats[user_id]
+                
+            logger.info(f"User {user_id} sessions and channels cleaned up on logout")
                 
         except Exception as e:
             logger.error(f"Error in logout cleanup: {str(e)}", exc_info=True)
@@ -246,17 +253,38 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             profile_image=user_data["profile_image"]
         )
         
-        self.active_chats[str(self.user.id)][session_id] = session.to_dict()
+        user_id = str(self.user.id)
+        self.active_chats[user_id][session_id] = session.to_dict()
+        
+        # Associate channel with new session
+        self.channel_sessions[user_id][self.user_channel] = session_id
+        
         return session
 
     async def send(self, text_data=None, bytes_data=None):
-        """Override send method to use custom JSON encoder"""
         if text_data is not None:
             if isinstance(text_data, str):
                 text_data = json.loads(text_data)
             await super().send(text_data=json.dumps(text_data, cls=UUIDEncoder))
         else:
             await super().send(bytes_data=bytes_data)
+
+    async def send_message_to_channel(self, message_data: Dict):
+        try:
+            user_id = str(self.user.id)
+            session_id = message_data.get('session_id')
+            
+            if (user_id in self.channel_sessions and 
+                self.user_channel in self.channel_sessions[user_id] and
+                self.channel_sessions[user_id][self.user_channel] == session_id):
+                
+                await self.channel_layer.group_send(
+                    self.user_channel,
+                    message_data
+                )
+            
+        except Exception as e:
+            logger.error(f"Error sending message to channel: {str(e)}")
 
     async def receive(self, text_data):
         try:
@@ -280,24 +308,27 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                     'message': 'New chat session created successfully'
                 })
 
-            message = await self.save_message(data, session_id, is_ai=False)
-            if message:
-                chat_session = self.active_chats[str(self.user.id)][session_id]
-                chat_session["lastMessage"] = message["text_content"]
-                chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
-                await self.channel_layer.group_send(
-                    self.user_channel,
-                    {
+            user_id = str(self.user.id)
+            if (user_id in self.channel_sessions and 
+                self.user_channel in self.channel_sessions[user_id] and
+                self.channel_sessions[user_id][self.user_channel] == session_id):
+                
+                message = await self.save_message(data, session_id, is_ai=False)
+                if message:
+                    chat_session = self.active_chats[user_id][session_id]
+                    chat_session["lastMessage"] = message["text_content"]
+                    chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+                    
+                    await self.send_message_to_channel({
                         'type': 'chat_message',
                         'session_id': session_id,
                         'message': message,
                         'is_ai': False
-                    }
-                )
+                    })
 
                 asyncio.create_task(
                     
-                        self.process_ai_response(message['text_content'], session_id, message)
+                        self.process_ai_response(message['text_content'], session_id, message, data)
                 )
                     
                     
@@ -370,51 +401,99 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             self.chatbot_instances[user_id] = {}
         
         if session_id not in self.chatbot_instances[user_id]:
-            groq_api_key = os.getenv('GROQ_API_KEY') or "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"  # Make sure to set this in your environment
+            groq_api_key = os.getenv('GROQ_API_KEY') or "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"
             index_path = f'faiss_index_{user_id}_{session_id}'
             
             try:
+                # Verify channel is still valid before initializing
+                if (user_id not in self.channel_sessions or
+                    self.user_channel not in self.channel_sessions[user_id] or
+                    self.channel_sessions[user_id][self.user_channel] != session_id):
+                    logger.info(f"Skipping chatbot initialization for inactive session {session_id}")
+                    return
+                    
                 self.chatbot_instances[user_id][session_id] = await asyncio.to_thread(
                     pdfchatBot.PDFChatbot,
                     groq_api_key=groq_api_key,
                     index_path=index_path
                 )
+                logger.info(f"Initialized chatbot for user {user_id} session {session_id}")
+                
             except Exception as e:
                 logger.error(f"Error initializing chatbot for session {session_id}: {e}", exc_info=True)
                 raise
 
 
-    async def process_ai_response(self, user_message: str, session_id: str, message: Dict):
+    async def process_ai_response(self, user_message: str, session_id: str, message: Dict, data):
         try:
-            user_id = str(self.user.id)
-            chat_session = self.active_chats[user_id][session_id]
-           
-            
-            # Initialize chatbot if not exists
-            await self.initialize_chatbot(user_id, session_id)
-            chatbot = self.chatbot_instances[user_id][session_id]
+            if data["ai_agent"] == 'pdf_agent':
+                user_id = str(self.user.id)
+                chat_session = self.active_chats[user_id][session_id]
 
-      
-            print("sesssioID",session_id,chatbot.chat_history)
-            
-            # Handle file attachments (PDF processing)
-            if message['attachments']:
-                file_path = message['attachments'][0]['file_path']
-                if file_path:
-                    # Process PDF and get summary
-                    print("Processing PDF...",file_path)
-                    summary = await asyncio.to_thread(chatbot.process_pdf, file_path)
-                    
-                    # Save the summary as AI response
-                    ai_message = await self.save_message({
-                        'text': f"I've processed the PDF. Here's a summary:\n\n{summary}",
-                        'message_type': MessageType.AI.value,
-                        'content': {}
-                    }, session_id, is_ai=True)
-                    
+                # Initialize chatbot if not exists
+                await self.initialize_chatbot(user_id, session_id)
+                chatbot = self.chatbot_instances[user_id][session_id]
+
+                print("sesssioID", session_id, chatbot.chat_history)
+
+                # Handle file attachments (PDF processing)
+                if message['attachments']:
+                    file_path = message['attachments'][0]['file_path']
+                    if file_path:
+                        # Process PDF and get summary
+                        print("Processing PDF...", file_path)
+                        summary = await asyncio.to_thread(chatbot.process_pdf, file_path)
+
+                        # Save the summary as AI response
+                        ai_message = await self.save_message({
+                            'text': f"I've processed the PDF. Here's a summary:\n\n{summary}",
+                            'message_type': MessageType.AI.value,
+                            'content': {}
+                        }, session_id, is_ai=True)
+
+                        if ai_message:
+                            chat_session["lastMessage"] = ai_message["text_content"]
+                            chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+                            await self.channel_layer.group_send(
+                                self.user_channel,
+                                {
+                                    'type': 'chat_message',
+                                    'session_id': session_id,
+                                    'message': ai_message,
+                                    'is_ai': True
+                                }
+                            )
+                        return
+                # Handle regular text messages
+                if user_message.strip():
+                    # Get AI response using chatbot
+                    ai_response, image, size = await asyncio.to_thread(chatbot.ask_question, user_message)
+                    # Save and send AI response
+                    if image and size:
+                        ai_message = await self.save_message({
+                            'text': ai_response,
+                            'message_type': MessageType.MULTIPLE.value,
+                            'content': {},
+                            'file': {
+                                "path": image,
+                                "name": "AiChatBot.png",
+                                "size": size,
+                                "type": "IMAGE",
+                            }
+                        }, session_id, is_ai=True)
+                    else:
+                        ai_message = await self.save_message({
+                            'text': ai_response,
+                            'message_type': MessageType.AI.value,
+                            'content': {}
+                        }, session_id, is_ai=True)
+
                     if ai_message:
+                        # Update chat session with latest message
                         chat_session["lastMessage"] = ai_message["text_content"]
                         chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+
+                        # Send message through channel layer to all connected clients
                         await self.channel_layer.group_send(
                             self.user_channel,
                             {
@@ -424,55 +503,80 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                                 'is_ai': True
                             }
                         )
-                    return
-            # Handle regular text messages
-            if user_message.strip():
-                # Get AI response using chatbot
-                ai_response,image,size= await asyncio.to_thread(chatbot.ask_question, user_message)
-                # Save and send AI response
-                if image and size:
+            elif data["ai_agent"] == 'web_agent':
+                print("comming here: ", data)
+                os.environ['GROQ_API_KEY'] =  "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" 
+                user_id = str(self.user.id)
+                chat_session = self.active_chats[user_id][session_id]
+
+                # Initialize web agent
+                web_agent = Agent(
+                    name="Web Agent",
+                    role="Search the web for information",
+                    model=Groq(id="llama-3.3-70b-versatile"),
+                    tools=[DuckDuckGo()],
+                    instructions=["Always include sources", "Use tables to display data"],
+                    # groq_api_key=groq_api_key,
+                    show_tool_calls=True,
+                    markdown=True,
+                    read_chat_history=True,
+                )
+
+                # Get response from web agent
+                try:
+                    response_text = await asyncio.to_thread(web_agent.run, user_message, stream=False)
+                    print("+++++++++: ", response_text)
+                    # print(dir(response_text))
+                    output_message = response_text.content
+                    print(output_message)
+                    print("output_message",type(output_message))
+
                     ai_message = await self.save_message({
-                    'text': ai_response,
-                    'message_type': MessageType.MULTIPLE.value,
-                    'content': {},
-                    'file':    {
-                                        "path": image,
-                                        "name": "AiChatBot.png",
-                                        "size": size,
-                                        "type": "IMAGE",
-                                }
-                }, session_id, is_ai=True)
-                else:
-                    ai_message = await self.save_message({
-                        'text': ai_response,
+                        'text': output_message,
                         'message_type': MessageType.AI.value,
                         'content': {}
                     }, session_id, is_ai=True)
-                
-                if ai_message:
-                    # Update chat session with latest message
-                    chat_session["lastMessage"] = ai_message["text_content"]
-                    chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+
+                    if ai_message:
+                        chat_session["lastMessage"] = ai_message["text_content"]
+                        chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+                        
+                        await self.channel_layer.group_send(
+                            self.user_channel,
+                            {
+                                'type': 'chat_message',
+                                'session_id': session_id,
+                                'message': ai_message,
+                                'is_ai': True
+                            }
+                        )
+                except Exception as e:
+                    logger.error(f"Error processing web agent response: {str(e)}", exc_info=True)
                     
-                    # Send message through channel layer to all connected clients
-                    await self.channel_layer.group_send(
-                        self.user_channel,
-                        {
-                            'type': 'chat_message',
-                            'session_id': session_id,
-                            'message': ai_message,
-                            'is_ai': True
-                        }
-                    )
+                    error_message = await self.save_message({
+                        'text': "I apologize, but I'm having trouble retrieving information from the web right now.",
+                        'message_type': MessageType.SYSTEM.value,
+                        'content': {}
+                    }, session_id, is_ai=True)
+
+                    if error_message:
+                        await self.channel_layer.group_send(
+                            self.user_channel,
+                            {
+                                'type': 'chat_message',
+                                'session_id': session_id,
+                                'message': error_message,
+                                'is_ai': True
+                            }
+                        )
         except Exception as e:
             logger.error(f"Error processing AI response: {str(e)}", exc_info=True)
-            # Create and send error message
             error_message = await self.save_message({
                 'text': "I apologize, but I'm having trouble processing your request right now.",
                 'message_type': MessageType.SYSTEM.value,
                 'content': {}
             }, session_id, is_ai=True)
-            
+
             if error_message:
                 await self.channel_layer.group_send(
                     self.user_channel,
@@ -481,30 +585,29 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                         'session_id': session_id,
                         'message': error_message,
                         'is_ai': True
-                    }
-                )
+                    })
+
     async def chat_message(self, event):
-        """
-        Handler for chat_message type events from channel layer.
-        This method handles both user and AI messages.
-        """
         try:
             if event.get('is_ai', False):
-                # Small delay for AI messages to ensure proper ordering
                 await asyncio.sleep(0.1)
             
-            # Prepare message data
-            message_data = {
-                'type': 'message',
-                'session_id': event['session_id'],
-                'message': event['message']
-            }
+            user_id = str(self.user.id)
+            session_id = event['session_id']
             
-            # Ensure all data is serializable
-            message_data = serialize_uuid(message_data)
-            
-            # Send to WebSocket
-            await self.send(message_data)
+            # Only send if this channel is still associated with the session
+            if (user_id in self.channel_sessions and 
+                self.user_channel in self.channel_sessions[user_id] and
+                self.channel_sessions[user_id][self.user_channel] == session_id):
+                
+                message_data = {
+                    'type': 'message',
+                    'session_id': session_id,
+                    'message': event['message']
+                }
+                
+                message_data = serialize_uuid(message_data)
+                await self.send(message_data)
             
         except Exception as e:
             logger.error(f"Error in chat_message handler: {str(e)}", exc_info=True)

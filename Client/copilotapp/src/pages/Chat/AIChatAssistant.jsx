@@ -153,7 +153,7 @@ const LoadingAnimation = () => {
   );
 };
 
-const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"}) => {
+const Chat = ({ uniqueID, paper = null }) => {
   const { token } = useToken();
   const [inputMessage, setInputMessage] = useState("");
   const messagesEndRef = useRef(null);
@@ -167,17 +167,17 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
   const [sessionId, setSessionId] = useState(null);
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const { uploadFile, addUploadedFiles } = useAuth();
-  const [processedFiles, setProcessedFiles] = useState(new Set());
+  const [processedFiles, setProcessedFiles] = useState(new Set()); 
 
   useEffect(() => {
     // Check for new files that haven't been processed yet
     addUploadedFiles.forEach((file) => {
-      if (!processedFiles.has(file.name)) {
-        handleFileUpload(file); // Call the upload function
-        setProcessedFiles((prev) => new Set(prev).add(file.name)); // Mark file as processed
-      }
+        if (!processedFiles.has(file.name)) {
+            handleFileUpload(file); // Call the upload function
+            setProcessedFiles((prev) => new Set(prev).add(file.name)); // Mark file as processed
+        }
     });
-  }, [addUploadedFiles]);
+}, [addUploadedFiles]);
 
   // Helper functions for session storage
   const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;
@@ -218,8 +218,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
   };
 
   const handleAIChatMessage = useCallback((data) => {
-   
-
     if (data.type === "chat_created") {
       const newSessionId = data.chat_id;
       setSessionId(newSessionId);
@@ -233,13 +231,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
       setIsLoading(false);
       setIsWaitingForAI(false);
     } else if (data.type === "message") {
-      
-      
-      if (sessionId && sessionId !== data.session_id) {
-        return;
-      }
-      
-
       const msg = data.message;
       const currentSessionId = data.session_id || sessionId;
 
@@ -256,7 +247,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
           receipts: msg.receipts || [],
           metadata: msg.metadata || {},
           session_id: currentSessionId,
-          agent_type: msg.ai_agent || aiAgent
         });
       }
 
@@ -278,8 +268,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
   }, [uniqueID, sessionId, addMessage]);
 
   const handleSendMessage = async () => {
-
-
     if (inputMessage.trim() && isConnected && !isLoading && !isWaitingForAI) {
       try {
         setIsLoading(true);
@@ -293,7 +281,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
           message_type: "TEXT",
           content: {},
           session_id: sessionId,
-          ai_agent: aiAgent
         });
       } catch (error) {
         console.error("Failed to send message:", error);
@@ -345,7 +332,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
         content: {},
         session_id: sessionId,
         file: result,
-        ai_agent: aiAgent
       });
       setInputMessage("");
 
@@ -415,7 +401,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
           text: "Hello AI!",
           message_type: "TEXT",
           content: {},
-          ai_agent: aiAgent,
           file: paper ? {
             "message": "File uploaded successfully",
             "path": paper.pdf_url,
@@ -559,29 +544,6 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
 
         <div style={styles.aiChatInput} className="chat-input-container">
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            {/* File Upload Button */}
-
-            <Upload
-              showUploadList={false}
-              beforeUpload={handleFileUpload}
-              accept="image/*,.pdf,.doc,.docx,.txt"
-            >
-              {aiAssistant ? (
-                null
-              ) : <Button
-                icon={<PaperClipOutlined />}
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderColor: "#1A1A1A",
-                  color: "#fff",
-                  borderRadius: "3px", // Boxy design with minimal rounding
-                  padding: "6px 10px",
-                  height: "32px",
-                  transition: "all 0.2s ease",
-                }}
-                disabled={!isConnected || isLoading || isWaitingForAI}
-              />}
-            </Upload>
 
             {/* Input Text Area */}
             <TextArea
