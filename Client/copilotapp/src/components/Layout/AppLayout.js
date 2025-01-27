@@ -5,13 +5,15 @@ import {
     HomeOutlined, 
     AppstoreOutlined, 
     LogoutOutlined,
-    BellOutlined 
+    BellOutlined ,
+    BulbOutlined, BulbFilled 
 } from '@ant-design/icons';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
 import api from '../../utils/api';
 import ChatUiButton from '../../pages/ChatUiButton';
 import Logo from '../../asset/HeaderLogo';
+import { pad, transform } from 'lodash';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -24,6 +26,15 @@ const AppLayout = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(false);
     const notificationService = api.notifications();
+    const [isDarkMode, setIsDarkMode] = useState(
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
+
+    const toggleTheme = () => {
+        const newMode = !isDarkMode;
+        setIsDarkMode(newMode);
+        window.__themeChange?.(newMode); // This will be defined in App.js
+    };
 
     useEffect(() => {
         fetchNotifications();
@@ -65,7 +76,10 @@ const AppLayout = () => {
         display: 'flex',
         alignItems: 'center',
         gap: '16px',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        // marginLeft: '-19px',
+        transform: 'scale(1.3)',
+        paddingLeft: '4px',
     };
 
     const menuStyle = {
@@ -211,7 +225,7 @@ const AppLayout = () => {
     return (
         <Layout style={{ minHeight: '100vh', background: token.colorBgContainer }}>
             <Header style={headerStyle}>
-                <Link to="/" style={logoStyle}>
+                <Link to="/"   style={logoStyle}>
                     <Logo></Logo>
                    
                     <Title 
@@ -253,6 +267,16 @@ const AppLayout = () => {
                         }
                     ]}
                 />
+
+<Button
+    type="text"
+    icon={isDarkMode ? <BulbOutlined /> : <BulbFilled />}
+    onClick={toggleTheme}
+    style={{ 
+        marginRight: '8px',
+        color: token.colorText
+    }}
+/>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <Dropdown 

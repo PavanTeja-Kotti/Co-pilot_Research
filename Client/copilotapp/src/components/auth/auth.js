@@ -34,7 +34,15 @@ const AppHeader = () => {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* <DatabaseOutlined style={{ fontSize: '24px', color: '#60a5fa' }} /> */}
-        <Logo/>
+        <a href="/"  style={{
+             display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  cursor: 'pointer',
+                  marginLeft: '-10px',
+                  transform: 'scale(1.2)'
+        }} ><Logo/></a>
+        
         <Title level={3} style={{ margin: 0, color: 'rgba(255, 255, 255, 0.95)' }}>
           {/* Tech Titans */}
         </Title>

@@ -12,30 +12,32 @@ import {
   Button,
   message,
   Spin,
-  Tooltip
+  Tooltip,
+  DatePicker
 } from "antd";
 import { 
   SearchOutlined, 
   ReloadOutlined, 
   BookOutlined, 
-  BookFilled ,
-  CheckOutlined, MinusOutlined
+  BookFilled,
+  CheckOutlined, 
+  MinusOutlined
 } from "@ant-design/icons";
-import debounce from 'lodash/debounce';
 import PdfViewer from "../components/common/PdfViewer";
 import AIChat from "./Chat/AIChat";
 import InfiniteScroll from 'react-infinite-scroll-component';
 import api from "../utils/api";
+import Search from "antd/es/input/Search";
 
 const { Title, Text, Paragraph } = Typography;
 const { useToken } = theme;
+const { RangePicker } = DatePicker;
 
 const PAGE_SIZE = 10;
 
 const ResearchPapers = () => {
-
   const { token } = useToken();
-  // State
+  
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -45,120 +47,73 @@ const ResearchPapers = () => {
   const [filters, setFilters] = useState({
     search: "",
     category: "",
-    source: ""
+    dateRange: {
+      start: null,
+      end: null
+    }
   });
   const [categories, setCategories] = useState([]);
+  const [Resarchcategories, setResarchcategories] = useState([]);
   
-  // Refs
   const isInitialLoad = useRef(true);
   const totalItems = useRef(0);
+  const debounceTimeout = useRef(null);
 
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await api.categories().getCategories();
-        if (response.success) {
-          setCategories(response.data || []);
-        } else {
-          message.error('Failed to fetch categories');
-        }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        message.error('Failed to fetch categories');
-      }
-    };
-
-    fetchCategories();
-  }, []);
-
-
-  // Fetch papers with current filters and pagination
-  const fetchPapers = async (currentOffset = 0, append = false) => {
+  const fetchPapers = useCallback(async (currentOffset = 0, append = false,search="") => {
     try {
+      setLoading(currentOffset === 0 && !append);
+      
       const response = await api.scraping().getPapers(
         currentOffset,
         PAGE_SIZE,
         {
-          search: filters.search,
+          search: search.trim(),
           categories: filters.category,
-          source: filters.source
+          startDate: filters.dateRange.start?.toISOString(),
+          endDate: filters.dateRange.end?.toISOString()
         }
       );
 
       if (response.success) {
         const newPapers = response.data.results || [];
         totalItems.current = response.data.count || 0;
-        
         setPapers(prev => append ? [...prev, ...newPapers] : newPapers);
         setHasMore(response.data.next !== null);
-        return true;
       } else {
         message.error(response.error || 'Failed to fetch papers');
-        return false;
       }
     } catch (error) {
       console.error('Error fetching papers:', error);
       message.error('Failed to fetch papers');
-      return false;
+    } finally {
+      setLoading(false);
+      setSearching(false);
     }
-    // setPapers([
-    //   {
-    //     id: 1,
-    //     title: "Exploring AI in Healthcare",
-    //     abstract: "This paper explores the applications of AI in modern healthcare systems.",
-    //     authors: ["John Doe", "Jane Smith"],
-    //     source: "ScienceDirect",
-    //     url: "https://sciencedirect.com/ai-healthcare",
-    //     pdf_url: "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf",
-    //     categories: ["AI", "Healthcare"],
-    //     publication_date: "2024-01-15",
-    //     created_at: "2024-01-16T12:00:00Z",
-    //   },
-    //   {
-    //     id: 2,
-    //     title: "Quantum Computing Revolution",
-    //     abstract: "This paper discusses advancements in quantum computing.",
-    //     authors: ["Alice Johnson", "Bob Lee"],
-    //     source: "IEEE",
-    //     url: "https://ieee.org/quantum-computing",
-    //     pdf_url: "https://www.antennahouse.com/hubfs/xsl-fo-sample/pdf/basic-link-1.pdf",
-    //     categories: ["Quantum Computing", "Technology"],
-    //     publication_date: "2024-02-01",
-    //     created_at: "2024-02-02T15:00:00Z",
-    //   },
-    // ])
-  };
+  }, [filters]);
 
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    debounce(async () => {
-      try {
-        setSearching(true);
-        setOffset(0);
-        await fetchPapers(0, false);
-      } finally {
-        setSearching(false);
-      }
-    }, 2000),
-    [filters]
-  );
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+    
+    if (filters.category || filters.dateRange.start || filters.dateRange.end) {
+      setSearching(true);
+      setOffset(0);
+      fetchPapers(0, false);
+    }
+  }, [filters.category, filters.dateRange, fetchPapers]);
 
-  // Load more data for infinite scroll
-  const loadMoreData = async () => {
+  const loadMoreData = useCallback(async () => {
     if (loading || searching || !hasMore) return;
     
     const newOffset = offset + PAGE_SIZE;
     setOffset(newOffset);
     await fetchPapers(newOffset, true);
-  };
+  }, [loading, searching, hasMore, offset, fetchPapers]);
 
-  // Toggle paper bookmark
-  const handleToggleBookmark = async (paperId, e) => {
+  const handleToggleBookmark = useCallback(async (paperId, e) => {
     e.stopPropagation();
     try {
       const response = await api.scraping().toggleBookmark(paperId);
-     
+      
       if (response.success) {
         setPapers(prev => prev.map(paper => 
           paper.id === paperId 
@@ -173,66 +128,100 @@ const ResearchPapers = () => {
       console.error('Error toggling bookmark:', error);
       message.error('Failed to update bookmark');
     }
-  };
+  }, []);
 
-  const handleToggleRead = async (paperId, e) => {
+  const handleToggleRead = useCallback(async (paperId, e) => {
     e.stopPropagation();
     try {
       const response = await api.scraping().toggleRead(paperId);
-     
+      
       if (response.success) {
         setPapers(prev => prev.map(paper => 
           paper.id === paperId 
             ? { ...paper, is_paper_read: !paper.is_paper_read }
             : paper
         ));
-        message.success(response.message || 'Bookmark updated successfully');
+        message.success(response.message || 'Read status updated successfully');
       } else {
-        message.error(response.error || 'Failed to update bookmark');
+        message.error(response.error || 'Failed to update read status');
       }
     } catch (error) {
-      console.error('Error toggling bookmark:', error);
-      message.error('Failed to update bookmark');
+      console.error('Error toggling read status:', error);
+      message.error('Failed to update read status');
+    }
+  }, []);
+
+  const handleCardClick = useCallback((id) => {
+    setExpandedCardId(prev => prev === id ? null : id);
+  }, []);
+
+  const handleSearch = useCallback((value) => {
+    setFilters(prev => ({ ...prev, search: value }));
+  }, []);
+
+  const handleCategoryChange = useCallback((value) => {
+    setFilters(prev => ({ ...prev, category: value }));
+  }, []);
+
+  const handleDateRangeChange = useCallback((dates) => {
+    setFilters(prev => ({
+      ...prev,
+      dateRange: {
+        start: dates?.[0] || null,
+        end: dates?.[1] || null
+      }
+    }));
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.categories().getCategories();
+      if (response.success) {
+        setCategories(response.data || []);
+      } else {
+        message.error('Failed to fetch categories');
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      message.error('Failed to fetch categories');
     }
   };
-  // Initial load
+
+  const fetchinlineCategories = async () => {
+    try {
+      const response = await api.scraping().getresearchfocus();
+      if (response.success) {
+        setResarchcategories(response.data.research_focus?.topic_distribution || []);
+      } else {
+        message.error('Failed to fetch categories');
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      message.error('Failed to fetch categories');
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+    fetchinlineCategories();
+  }, []);
+
   useEffect(() => {
     const loadInitialData = async () => {
       await fetchPapers(0, false);
-      setLoading(false);
       isInitialLoad.current = false;
     };
 
     loadInitialData();
-  }, []);
+  }, [fetchPapers]);
 
-  // Handle filter changes
-  useEffect(() => {
-    if (!isInitialLoad.current) {
-      debouncedSearch();
-    }
-  }, [filters, debouncedSearch]);
-
-  const handleCardClick = (id) => {
-    setExpandedCardId(prev => prev === id ? null : id);
-  };
-
-  const handleReset = () => {
-    setFilters({
-      search: "",
-      category: "",
-      source: ""
-    });
-  };
-
-  // Render functions
   const renderSkeletonCard = () => (
     <Card style={{ width: "100%", marginBottom: 16 }}>
       <Skeleton active paragraph={{ rows: 4 }} />
     </Card>
   );
 
-  const renderExpandedContent = (paper) => {
+  const renderExpandedContent = useCallback((paper) => {
     if (expandedCardId !== paper.id) return null;
 
     return (
@@ -253,23 +242,21 @@ const ResearchPapers = () => {
           flex: 1, 
           background: token.colorBgContainer,
           borderRadius: token.borderRadiusLG,
-          // padding: 16
         }}>
-          <AIChat uniqueID={paper.id}  paper={paper} />
+          <AIChat uniqueID={paper.id} paper={paper} />
         </div>
         <div style={{ 
           flex: 1,
           background: token.colorBgContainer,
           borderRadius: token.borderRadiusLG,
-          // padding: 16
         }}>
           {paper.pdf_url && <PdfViewer pdfUrl={paper.pdf_url} />}
         </div>
       </div>
     );
-  };
+  }, [expandedCardId, token.colorBgContainer, token.colorBgElevated, token.borderRadiusLG]);
 
-  const renderPaperCard = (paper) => (
+  const renderPaperCard = useCallback((paper) => (
     <Card
       key={paper.id}
       hoverable
@@ -282,19 +269,9 @@ const ResearchPapers = () => {
       bodyStyle={{ padding: 20 }}
       onClick={() => handleCardClick(paper.id)}
     >
-      <Space 
-        direction="vertical" 
-        size="middle" 
-        style={{ width: "100%" }}
-      >
+      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <Space style={{ width: "100%", justifyContent: "space-between" }}>
-          <Title 
-            level={4} 
-            style={{ 
-              margin: 0,
-              color: token.colorTextHeading
-            }}
-          >
+          <Title level={4} style={{ margin: 0, color: token.colorTextHeading }}>
             {paper.title}
           </Title>
           <Space>
@@ -315,12 +292,7 @@ const ResearchPapers = () => {
           </Space>
         </Space>
 
-        <Paragraph 
-          style={{ 
-            color: token.colorTextSecondary,
-            margin: 0
-          }}
-        >
+        <Paragraph style={{ color: token.colorTextSecondary, margin: 0 }}>
           {paper.abstract}
         </Paragraph>
 
@@ -338,11 +310,10 @@ const ResearchPapers = () => {
           </Space>
         </Space>
       </Space>
-      {expandedCardId && renderExpandedContent(paper)}
+      {renderExpandedContent(paper)}
     </Card>
-  );
+  ), [token, handleCardClick, handleToggleRead, handleToggleBookmark, renderExpandedContent]);
 
-  // Update only the Input section within renderSearchBar
   const renderSearchBar = () => (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <Space wrap align="center" style={{ justifyContent: "space-between", width: "100%" }}>
@@ -359,57 +330,53 @@ const ResearchPapers = () => {
 
         <Space wrap>
           <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-            <Input
+            <Search
               placeholder="Search papers..."
-              prefix={<SearchOutlined />}
-              style={{ width: 300 }}
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              style={{ width: 240 }}
+              // value={filters.search}
+              // onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              onSearch={(value) => {
+                setSearching(true);
+                setOffset(0);
+                fetchPapers(0, false,value);
+              }}
               allowClear
             />
             {searching && (
-              <Spin 
-                size="small" 
-                style={{ 
-                  position: 'absolute',
-                  right: '40px',
-                }}
-              />
+              <Spin size="small" style={{ position: 'absolute', right: '40px' }} />
             )}
           </div>
+          
           <Select
             placeholder="Category"
-            style={{ width: 200 }}
+            style={{ width: 220 }}
             allowClear
             value={filters.category}
-            onChange={(value) => setFilters(prev => ({ ...prev, category: value }))}
+            onChange={handleCategoryChange}
             showSearch
             optionFilterProp="children"
             filterOption={(input, option) =>
               option?.children?.toLowerCase().indexOf(input.toLowerCase()) >= 0
             }
           >
-            {categories.map(category => (
-              <Select.Option key={category.id} value={category.name}>
-                {category.name}
+            {[
+              ...new Set([
+                ...categories.map(c => c.name.toLowerCase().charAt(0).toUpperCase() + c.name.toLowerCase().slice(1)),
+                ...Resarchcategories?.map(c => c.category.toLowerCase().charAt(0).toUpperCase() + c.category.toLowerCase().slice(1))
+              ])
+            ].map((category, index) => (
+              <Select.Option key={index} value={category}>
+                {category}
               </Select.Option>
             ))}
           </Select>
-          <Select
-            placeholder="Source"
-            style={{ width: 150 }}
-            allowClear
-            value={filters.source}
-            onChange={(value) => setFilters(prev => ({ ...prev, source: value }))}
-          >
-            {/* Source options remain the same */}
-          </Select>
-          <Button 
-            icon={<ReloadOutlined />}
-            onClick={handleReset}
-          >
-            Reset
-          </Button>
+
+          <RangePicker 
+            value={[filters.dateRange.start, filters.dateRange.end]}
+            onChange={handleDateRangeChange}
+            allowEmpty={[true, true]}
+            style={{ width: 220 }}
+          />
         </Space>
       </Space>
     </Space>
@@ -420,7 +387,7 @@ const ResearchPapers = () => {
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
         {renderSearchBar()}
 
-        {loading ||searching ? (
+        {loading ? (
           Array(3).fill().map((_, i) => (
             <div key={i}>{renderSkeletonCard()}</div>
           ))

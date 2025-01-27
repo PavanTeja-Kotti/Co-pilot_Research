@@ -866,10 +866,10 @@ const MessageBubble = ({ message, type = 'private', Aichat = false }) => {
         whiteSpace: 'pre-wrap'
       }}>
         {/* <RichContent content={message.text_content} /> */}
-         <Markdown>{message.text_content}</Markdown>
+         {/* <Markdown>{message.text_content}</Markdown> */}
         {/* {message.text_content} */} 
         {/* <MarkdownView>{message.text_content}</MarkdownView> */}
-        {/* {message.text_content} */}
+        {message.text_content}
         
       </Text>
     );
