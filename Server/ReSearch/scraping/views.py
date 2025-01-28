@@ -145,6 +145,8 @@ def statsData(request):
     return Response(data, status=status.HTTP_200_OK)
 
 
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def readPaper(request):
@@ -244,6 +246,10 @@ class ResearchPaperPagination(LimitOffsetPagination):
     default_limit = 10
     max_limit = 5000
 
+
+
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list_withPage(request):
@@ -252,6 +258,7 @@ def research_paper_list_withPage(request):
         filtered_queryset = apply_filters(queryset, request)
        
         paginator = ResearchPaperPagination()
+        
         
         paginated_queryset = paginator.paginate_queryset(filtered_queryset, request)
         
@@ -941,7 +948,7 @@ def summarization_paper(request, pdf_url=None):
         # Prepare response data
         response_data = {
             "title": research_paper.title,
-            # "summary": summary,
+            "summary": summary,
             "pdf_url": pdf_url,
         }
 
@@ -1058,7 +1065,7 @@ class PaperIndexManager:
         except Exception as e:
             print(f"Index building error: {str(e)}")
 
-def get_enhanced_content_recommendations(user_id: str) -> List[Tuple[str, float]]:
+def get_enhanced_content_recommendations(user_id: str) -> List[str]:
     index_manager = PaperIndexManager()
     
     try:
@@ -1104,7 +1111,7 @@ def get_enhanced_content_recommendations(user_id: str) -> List[Tuple[str, float]
             if papers:
                 index_manager.build_index(papers)
         
-        # Process recommendations with scores
+        # Process recommendations
         paper_scores = []
         seen_papers = {str(p.id) for p in user_papers}
         
@@ -1123,14 +1130,15 @@ def get_enhanced_content_recommendations(user_id: str) -> List[Tuple[str, float]
                 
                 final_score = (interest_score * 0.7) + (diversity_score * 0.3)
                 if final_score > 0:
-                    paper_scores.append((str(paper.id), round(final_score, 4)))
+                    paper_scores.append((str(paper.id), final_score))
         
         # Sort recommendations
-        return sorted(paper_scores, key=lambda x: x[1], reverse=True)
+        return [pid for pid, _ in sorted(paper_scores, key=lambda x: x[1], reverse=True)]
         
     except Exception as e:
         print(f"Recommendation error: {str(e)}")
         return []
+
 def calculate_interest_score(paper, user_interests, user_keywords, user_authors, index_manager):
     score = 0
     
@@ -1191,18 +1199,16 @@ def recommendation_paper(request):
     categories = [cat.lower() for cat in request.GET.getlist('categories', [])]
     
     cache_key = f'recommendations_{request.user.id}'
-    recommended_data = cache.get(cache_key)
+    recommended_ids = cache.get(cache_key)
     
-    if recommended_data is None:
-        recommended_data = get_enhanced_content_recommendations(str(request.user.id))
-        if recommended_data:
-            cache.set(cache_key, recommended_data, CACHE_TIMEOUT)
+    if recommended_ids is None:
+        recommended_ids = get_enhanced_content_recommendations(str(request.user.id))
+        if recommended_ids:
+            cache.set(cache_key, recommended_ids, CACHE_TIMEOUT)
     
-    if not recommended_data:
+    if not recommended_ids:
         return Response([])
 
-    # Split IDs and scores
-    recommended_ids, scores = zip(*recommended_data) if recommended_data else ([], [])
     recommendations = ResearchPaper.objects.filter(id__in=recommended_ids)
     
     if search_query:
@@ -1236,22 +1242,15 @@ def recommendation_paper(request):
         )
     )
     
-    # Create a mapping of paper IDs to their scores
-    score_map = dict(recommended_data)
-    
-    # Sort recommendations and attach scores
+    id_map = {str(id): i for i, id in enumerate(recommended_ids)}
     recommendations = sorted(
         recommendations,
-        key=lambda x: score_map.get(str(x.id), 0),
-        reverse=True
+        key=lambda x: id_map.get(str(x.id), float('inf'))
     )
     
     paginator = ResearchPaperPagination()
     page = paginator.paginate_queryset(recommendations, request)
     
-    # Serialize papers and add recommendation scores
-    serialized_papers = ResearchPaperSerializer(page, many=True, context={'request': request}).data
-    for paper in serialized_papers:
-        paper['recommendation_score'] = score_map.get(paper['id'], 0)
-    
-    return paginator.get_paginated_response(serialized_papers)
+    return paginator.get_paginated_response(
+        ResearchPaperSerializer(page, many=True, context={'request': request}).data
+    )

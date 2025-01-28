@@ -3,13 +3,11 @@ import {
   Button,
   Input,
   List,
-  Typography,
   Upload,
   message,
   theme,
 } from "antd";
 import {
-  SendOutlined,
   PaperClipOutlined,
 } from "@ant-design/icons";
 import MessageBubble from "./MessageBubble";
@@ -168,16 +166,20 @@ const Chat = ({ uniqueID, paper = null, aiAssistant = false, aiAgent="pdf_agent"
   const [uploadingFiles, setUploadingFiles] = useState(new Map());
   const { uploadFile, addUploadedFiles } = useAuth();
   const [processedFiles, setProcessedFiles] = useState(new Set());
+  const { SetaddUploadedFiles } = useAuth(); 
 
   useEffect(() => {
-    // Check for new files that haven't been processed yet
     addUploadedFiles.forEach((file) => {
       if (!processedFiles.has(file.name)) {
-        handleFileUpload(file); // Call the upload function
-        setProcessedFiles((prev) => new Set(prev).add(file.name)); // Mark file as processed
+        handleFileUpload(file); 
+        setProcessedFiles((prev) => new Set(prev).add(file.name)); 
       }
     });
-  }, [addUploadedFiles]);
+  
+    if (addUploadedFiles.length > 0) {
+      SetaddUploadedFiles([]); // setting rtpty list
+    }
+  }, [addUploadedFiles, processedFiles]);
 
   // Helper functions for session storage
   const getStorageKey = (uniqueId, sessionId) => `chat_${uniqueId}_${sessionId}`;

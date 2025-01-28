@@ -78,7 +78,6 @@ const PDFWindow = () => {
                 console.log("called")
                 const zip = new JSZip();
                 const content = await zip.loadAsync(file);
-                // Extract PDF files from ZIP
                 for (const filename of Object.keys(content.files)) {
                     if (filename.endsWith('.pdf')) {
                         const pdfBlob = await content.files[filename].async('blob');
@@ -333,8 +332,8 @@ const NoteTaking = () => {
                     ]}
                     style={{
                         cursor: 'pointer',
-                        transition: 'background-color 0.3s',
-                        border: '1px solid #444444',
+                        background: token.colorBgContainer,
+                        border: `1px solid ${token.colorBorder}`,
                         borderRadius: '4px',
                         padding: '10px',
                         '&:hover': {
@@ -342,8 +341,8 @@ const NoteTaking = () => {
                         }
                     }}
                     className="note-item"
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#333333'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = ''}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = token.colorBgContainer}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = `1px solid ${token.colorBorder}`}
                 >
                     <Typography.Text strong>{note.title}</Typography.Text>
                 </List.Item>

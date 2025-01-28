@@ -3,7 +3,6 @@ import { Row, Col, Typography, Select, Tag, Space, Badge, Skeleton, theme, messa
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { StarOutlined, RiseOutlined, FallOutlined, EyeOutlined } from '@ant-design/icons';
 import api from '../utils/api';
-import { DynamicIconRenderer } from './InterestPage';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { CardModel } from './Dashboard1';
 import { data } from 'react-router-dom';
