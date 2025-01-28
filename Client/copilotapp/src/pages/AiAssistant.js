@@ -40,18 +40,24 @@ const PDFWindow = () => {
 
     const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
-        const validFiles = uploadedFiles.filter(file =>
-            file.type === 'application/pdf' || file.type === 'application/zip'
-        );
-
+        const validFiles = [];
+    
+        for (const file of uploadedFiles) {
+            if (file.type === 'application/pdf') {
+                validFiles.push(file);
+            } else if (file.type === 'application/zip') {
+                console.log("zip found"); // Log message for ZIP files
+                validFiles.push(file);
+            }
+        }
+    
         if (validFiles.length !== uploadedFiles.length) {
             message.error('Only PDF and ZIP files are allowed.');
         }
-
+    
         setFiles((prevFiles) => [...prevFiles, ...validFiles]);
         event.target.value = null; // Reset input value to allow re-upload of the same file
-
-        // Call uploadFiles directly after handling file selection
+    
         await uploadFiles(validFiles);
     };
 
@@ -69,13 +75,14 @@ const PDFWindow = () => {
             if (file.type === 'application/pdf') {
                 pdfFilesToUpload.push(file);
             } else if (file.type === 'application/zip') {
+                console.log("called")
                 const zip = new JSZip();
                 const content = await zip.loadAsync(file);
                 // Extract PDF files from ZIP
                 for (const filename of Object.keys(content.files)) {
                     if (filename.endsWith('.pdf')) {
                         const pdfBlob = await content.files[filename].async('blob');
-                        pdfFilesToUpload.push(new File([pdfBlob], filename)); // Create a new File object
+                        pdfFilesToUpload.push(new File([pdfBlob], filename));
                     }
                 }
             }
@@ -91,28 +98,28 @@ const PDFWindow = () => {
         });
 
         setLoading(true);
-        try {
-            const response = await fetch('/api/get_list_documents/', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: formData,
-            });
+        // try {
+        //     const response = await fetch('/api/get_list_documents/', {
+        //         method: 'POST',
+        //         headers: {
+        //             'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        //         },
+        //         body: formData,
+        //     });
 
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`);
-            }
+        //     if (!response.ok) {
+        //         throw new Error(`Upload failed: ${response.statusText}`);
+        //     }
 
-            const data = await response.json();
-            message.success('Files uploaded successfully');
-            console.log('Uploaded file names:', data.file_names);
-            setFiles([]); // Clear files after successful upload
-        } catch (error) {
-            message.error(error.message);
-        } finally {
-            setLoading(false);
-        }
+        //     const data = await response.json();
+        //     message.success('Files uploaded successfully');
+        //     console.log('Uploaded file names:', data.file_names);
+        //     setFiles([]); // Clear files after successful upload
+        // } catch (error) {
+        //     message.error(error.message);
+        // } finally {
+        //     setLoading(false);
+        // }
     };
 
     const handleOpenFileInput = () => {
@@ -361,7 +368,7 @@ const AiAssistant = () => {
 
     const rowStyle = {
         display: "flex",
-        overflow: "hidden", 
+        overflow: "hidden",
         margin: "10px"
     };
 
@@ -395,10 +402,10 @@ const AiAssistant = () => {
         margin: "0px 10px",
         borderBottom: "1px solid #37383b",
         color: "white",
-        display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center", 
-        height: "37px", 
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        height: "37px",
     };
 
     const dropdownContainerStyle = {
@@ -471,8 +478,9 @@ const AiAssistant = () => {
                         </div>
                     </div>
                 </div>
-                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column',overflowY: 'auto'}}>
-                    <div style={{...boxStyle}}>
+                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column', overflowY: 'auto',scrollbarWidth: 'none', /* For Firefox */
+    '-ms-overflow-style': 'none' }}>
+                    <div style={{ ...boxStyle }}>
                         <h3 style={headingStyle}>Notes</h3>
                         <div style={contentStyle}>
                             <NoteTaking />

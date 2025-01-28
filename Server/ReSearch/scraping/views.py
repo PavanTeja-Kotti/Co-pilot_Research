@@ -145,8 +145,6 @@ def statsData(request):
     return Response(data, status=status.HTTP_200_OK)
 
 
-
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def readPaper(request):
@@ -246,10 +244,6 @@ class ResearchPaperPagination(LimitOffsetPagination):
     default_limit = 10
     max_limit = 5000
 
-
-
-
-
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def research_paper_list_withPage(request):
@@ -258,7 +252,6 @@ def research_paper_list_withPage(request):
         filtered_queryset = apply_filters(queryset, request)
        
         paginator = ResearchPaperPagination()
-        
         
         paginated_queryset = paginator.paginate_queryset(filtered_queryset, request)
         
@@ -948,7 +941,7 @@ def summarization_paper(request, pdf_url=None):
         # Prepare response data
         response_data = {
             "title": research_paper.title,
-            "summary": summary,
+            # "summary": summary,
             "pdf_url": pdf_url,
         }
 

@@ -516,7 +516,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                         )
             elif data["ai_agent"] == 'web_agent':
                 print("comming here: ", data)
-                os.environ['GROQ_API_KEY'] =  "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" 
+                os.environ['GROQ_API_KEY'] =  "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" 
                 user_id = str(self.user.id)
                 chat_session = self.active_chats[user_id][session_id]
 
@@ -524,7 +524,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                 web_agent = Agent(
                     name="Web Agent",
                     role="Search the web for information",
-                    model=Groq(id="llama-3.3-70b-versatile"),
+                    model=Groq(id="deepseek-r1-distill-llama-70b"),
                     tools=[DuckDuckGo()],
                     instructions=["Always include sources", "Use tables to display data"],
                     # groq_api_key=groq_api_key,
