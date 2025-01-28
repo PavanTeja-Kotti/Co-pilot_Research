@@ -40,9 +40,16 @@ const PDFWindow = () => {
 
     const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
-        const validFiles = uploadedFiles.filter(file =>
-            file.type === 'application/pdf' || file.type === 'application/zip'
-        );
+        const validFiles = [];
+
+        for (const file of uploadedFiles) {
+            if (file.type === 'application/pdf') {
+                validFiles.push(file);
+            } else if (file.type === 'application/zip') {
+                console.log("zip found"); // Log message for ZIP files
+                validFiles.push(file);
+            }
+        }
 
         if (validFiles.length !== uploadedFiles.length) {
             message.error('Only PDF and ZIP files are allowed.');
@@ -51,7 +58,6 @@ const PDFWindow = () => {
         setFiles((prevFiles) => [...prevFiles, ...validFiles]);
         event.target.value = null; // Reset input value to allow re-upload of the same file
 
-        // Call uploadFiles directly after handling file selection
         await uploadFiles(validFiles);
     };
 
@@ -69,13 +75,14 @@ const PDFWindow = () => {
             if (file.type === 'application/pdf') {
                 pdfFilesToUpload.push(file);
             } else if (file.type === 'application/zip') {
+                console.log("called")
                 const zip = new JSZip();
                 const content = await zip.loadAsync(file);
                 // Extract PDF files from ZIP
                 for (const filename of Object.keys(content.files)) {
                     if (filename.endsWith('.pdf')) {
                         const pdfBlob = await content.files[filename].async('blob');
-                        pdfFilesToUpload.push(new File([pdfBlob], filename)); // Create a new File object
+                        pdfFilesToUpload.push(new File([pdfBlob], filename));
                     }
                 }
             }
@@ -91,28 +98,28 @@ const PDFWindow = () => {
         });
 
         setLoading(true);
-        try {
-            const response = await fetch('/api/get_list_documents/', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                },
-                body: formData,
-            });
+        // try {
+        //     const response = await fetch('/api/get_list_documents/', {
+        //         method: 'POST',
+        //         headers: {
+        //             'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        //         },
+        //         body: formData,
+        //     });
 
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`);
-            }
+        //     if (!response.ok) {
+        //         throw new Error(`Upload failed: ${response.statusText}`);
+        //     }
 
-            const data = await response.json();
-            message.success('Files uploaded successfully');
-            console.log('Uploaded file names:', data.file_names);
-            setFiles([]); // Clear files after successful upload
-        } catch (error) {
-            message.error(error.message);
-        } finally {
-            setLoading(false);
-        }
+        //     const data = await response.json();
+        //     message.success('Files uploaded successfully');
+        //     console.log('Uploaded file names:', data.file_names);
+        //     setFiles([]); // Clear files after successful upload
+        // } catch (error) {
+        //     message.error(error.message);
+        // } finally {
+        //     setLoading(false);
+        // }
     };
 
     const handleOpenFileInput = () => {
@@ -175,6 +182,7 @@ const PDFWindow = () => {
 };
 
 const NoteTaking = () => {
+    const { token } = useToken();
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [notes, setNotes] = useState([]);
     const [currentTitle, setCurrentTitle] = useState("");
@@ -279,7 +287,7 @@ const NoteTaking = () => {
             />
 
             {/* Toolbar */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "10px", backgroundColor: "#1e1e1e", padding: "10px", borderRadius: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "10px", background: token.colorBgContainer, padding: "10px", borderRadius: "8px" }}>
                 <Button onClick={() => editor.chain().focus().toggleBold().run()} type={editor.isActive("bold") ? "primary" : "default"} icon={<BoldOutlined />}>
                 </Button>
                 <Button onClick={() => editor.chain().focus().toggleItalic().run()} type={editor.isActive("italic") ? "primary" : "default"} icon={<ItalicOutlined />}>
@@ -309,7 +317,7 @@ const NoteTaking = () => {
             </div>
 
             {/* Editor */}
-            <EditorContent editor={editor} style={{ background: "#1e1e1e", padding: "10px" }} />
+            <EditorContent editor={editor} style={{ background: token.colorBgContainer, padding: "10px", border: `1px solid ${token.colorBorder}` }} />
 
             {/* Save Button */}
             <Button type="primary" onClick={handleSave} disabled={!currentTitle} style={{ marginTop: "20px" }}>
@@ -354,23 +362,23 @@ const AiAssistant = () => {
 
     const containerStyle = {
         height: "92vh",
-        background: "#1f1f1f",
+        background: token.colorBgContainer, // Use token for background
         display: "flex",
         flexDirection: "column",
     };
 
     const rowStyle = {
         display: "flex",
-        overflow: "hidden", 
+        overflow: "hidden",
         margin: "10px"
     };
 
     const boxStyle = {
         flex: 1,
-        background: "#292929",
-        border: "1px solid #303030",
-        borderRadius: "6px",
-        color: "#e6e6e6",
+        background: token.colorBgContainer, // Use token for box background
+        border: `1px solid ${token.colorBorder}`, // Use token for border
+        borderRadius: token.borderRadiusLG, // Use token for border radius
+        color: token.textColorPrimary, // Assuming you have a text color token
         margin: "0 6px", // Spacing between columns
         display: "flex",
         flexDirection: "column",
@@ -378,9 +386,9 @@ const AiAssistant = () => {
 
     const headingStyle = {
         margin: "10px",
-        borderBottom: "1px solid #37383b",
+        borderBottom: `1px solid ${token.colorBorder}`, // Use token for border
         paddingBottom: "5px",
-        color: "white",
+        color: token.textColorHeading, // Assuming you have a specific heading color token
     };
 
     const contentStyle = {
@@ -388,17 +396,16 @@ const AiAssistant = () => {
         overflowY: "auto", // Allow vertical scrolling
         padding: "10px", // Padding for better spacing
         height: "300px",
-        overflow: "hidden",
     };
 
     const headingStyleChatbox = {
         margin: "0px 10px",
-        borderBottom: "1px solid #37383b",
-        color: "white",
-        display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center", 
-        height: "37px", 
+        borderBottom: `1px solid ${token.colorBorder}`, // Use token for border
+        color: token.textColorPrimary, // Use token for text color
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        height: "37px",
     };
 
     const dropdownContainerStyle = {
@@ -428,10 +435,11 @@ const AiAssistant = () => {
                 </div>
                 <div style={{ flexBasis: '35%', maxWidth: '35%' }}>
                     <div style={{
-                        background: "#292929",
-                        border: "1px solid #303030",
+                        // background: "#292929",
+                        border: `1px solid ${token.colorBorder}`,
                         borderRadius: "6px",
                         color: "#e6e6e6",
+                        background: token.colorBgContainer,
 
                     }}>
                         <div style={headingStyleChatbox}>
@@ -471,8 +479,11 @@ const AiAssistant = () => {
                         </div>
                     </div>
                 </div>
-                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column',overflowY: 'auto'}}>
-                    <div style={{...boxStyle}}>
+                <div style={{
+                    flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column', overflowY: 'auto', scrollbarWidth: 'none', /* For Firefox */
+                    '-ms-overflow-style': 'none'
+                }}>
+                    <div style={{ ...boxStyle }}>
                         <h3 style={headingStyle}>Notes</h3>
                         <div style={contentStyle}>
                             <NoteTaking />
