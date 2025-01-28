@@ -940,7 +940,8 @@ def summarization_paper(request, pdf_url=None):
             return Response({"error": "Research paper not found"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            summary = summarize_pdf(pdf_url)  # This function should handle the summarization
+            # summary = summarize_pdf(pdf_url)  # This function should handle the summarization
+            pass
         except Exception as e:
             return Response({"error": f"Summarization failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

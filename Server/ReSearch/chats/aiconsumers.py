@@ -7,13 +7,24 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from enum import Enum
 import uuid
-
+from phi.agent import Agent
+from phi.model.groq import Groq
+from phi.tools.duckduckgo import DuckDuckGo
+#from phi.tools.yfinance import YFinanceTools
+from rich.prompt import Prompt
+import typer
 from django.conf import settings
 from channels.generic.websocket import AsyncWebsocketConsumer
 from dataclasses import dataclass, asdict, field
 from abc import ABC, abstractmethod
 from . import consumers
 from . import pdfchatBot
+from dotenv import load_dotenv
+
+
+
+load_dotenv()
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -321,10 +332,14 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                         'is_ai': False
                     })
 
-                    asyncio.create_task(
-                        self.process_ai_response(message['text_content'], session_id, message)
-                    )
-            
+                asyncio.create_task(
+                    
+                        self.process_ai_response(message['text_content'], session_id, message, data)
+                )
+                    
+                    
+                    
+                
         except json.JSONDecodeError:
             logger.error("Invalid JSON in chat message")
             await self.send({
@@ -392,7 +407,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             self.chatbot_instances[user_id] = {}
         
         if session_id not in self.chatbot_instances[user_id]:
-            groq_api_key = os.getenv('GROQ_API_KEY') or "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"
+            groq_api_key = os.getenv('GROQ_API_KEY') 
             index_path = f'faiss_index_{user_id}_{session_id}'
             
             try:
@@ -413,108 +428,170 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             except Exception as e:
                 logger.error(f"Error initializing chatbot for session {session_id}: {e}", exc_info=True)
                 raise
-    
-    async def process_ai_response(self, user_message: str, session_id: str, message: Dict):
-        try:
-            user_id = str(self.user.id)
-            
-            # Verify channel is still valid for this session
-            if (user_id not in self.channel_sessions or
-                self.user_channel not in self.channel_sessions[user_id] or
-                self.channel_sessions[user_id][self.user_channel] != session_id):
-                return
-                
-            chat_session = self.active_chats[user_id][session_id]
-            await self.initialize_chatbot(user_id, session_id)
-            chatbot = self.chatbot_instances[user_id][session_id]
 
-            print("sesssioID", session_id, chatbot.chat_history)
-            
-            # Handle file attachments (PDF processing)
-            if message['attachments']:
-                file_path = message['attachments'][0]['file_path']
-                if file_path:
-                    print("Processing PDF...", file_path)
-                    summary = await asyncio.to_thread(chatbot.process_pdf, file_path)
-                    
-                    # Recheck channel validity after long operation
-                    if (user_id not in self.channel_sessions or
-                        self.user_channel not in self.channel_sessions[user_id] or
-                        self.channel_sessions[user_id][self.user_channel] != session_id):
+
+    def suppress_output(func):
+        with open(os.devnull, 'w') as fnull:
+            with redirect_stdout(fnull):
+                func()
+
+    async def process_ai_response(self, user_message: str, session_id: str, message: Dict, data):
+        try:
+            if data["ai_agent"] == 'pdf_agent':
+                user_id = str(self.user.id)
+                chat_session = self.active_chats[user_id][session_id]
+
+                # Initialize chatbot if not exists
+                await self.initialize_chatbot(user_id, session_id)
+                chatbot = self.chatbot_instances[user_id][session_id]
+
+                print("sesssioID", session_id, chatbot.chat_history)
+
+                # Handle file attachments (PDF processing)
+                if message['attachments']:
+                    file_path = message['attachments'][0]['file_path']
+                    if file_path:
+                        # Process PDF and get summary
+                        print("Processing PDF...", file_path)
+                        summary = await asyncio.to_thread(chatbot.process_pdf, file_path)
+
+                        # Save the summary as AI response
+                        ai_message = await self.save_message({
+                            'text': f"I've processed the PDF. Here's a summary:\n\n{summary}",
+                            'message_type': MessageType.AI.value,
+                            'content': {}
+                        }, session_id, is_ai=True)
+
+                        if ai_message:
+                            chat_session["lastMessage"] = ai_message["text_content"]
+                            chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+                            await self.channel_layer.group_send(
+                                self.user_channel,
+                                {
+                                    'type': 'chat_message',
+                                    'session_id': session_id,
+                                    'message': ai_message,
+                                    'is_ai': True
+                                }
+                            )
                         return
-                        
+                # Handle regular text messages
+                if user_message.strip():
+                    # Get AI response using chatbot
+                    ai_response, image, size = await asyncio.to_thread(chatbot.ask_question, user_message)
+                    # Save and send AI response
+                    if image and size:
+                        ai_message = await self.save_message({
+                            'text': ai_response,
+                            'message_type': MessageType.MULTIPLE.value,
+                            'content': {},
+                            'file': {
+                                "path": image,
+                                "name": "AiChatBot.png",
+                                "size": size,
+                                "type": "IMAGE",
+                            }
+                        }, session_id, is_ai=True)
+                    else:
+                        ai_message = await self.save_message({
+                            'text': ai_response,
+                            'message_type': MessageType.AI.value,
+                            'content': {}
+                        }, session_id, is_ai=True)
+
+                    if ai_message:
+                        # Update chat session with latest message
+                        chat_session["lastMessage"] = ai_message["text_content"]
+                        chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
+
+                        # Send message through channel layer to all connected clients
+                        await self.channel_layer.group_send(
+                            self.user_channel,
+                            {
+                                'type': 'chat_message',
+                                'session_id': session_id,
+                                'message': ai_message,
+                                'is_ai': True
+                            }
+                        )
+            elif data["ai_agent"] == 'web_agent':
+                print("comming here: ", data)
+                os.environ['GROQ_API_KEY'] =  "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" 
+                user_id = str(self.user.id)
+                chat_session = self.active_chats[user_id][session_id]
+
+                # Initialize web agent
+                web_agent = Agent(
+                    name="Web Agent",
+                    role="Search the web for information",
+                    model=Groq(id="llama-3.3-70b-versatile"),
+                    tools=[DuckDuckGo()],
+                    instructions=["Always include sources", "Use tables to display data"],
+                    # groq_api_key=groq_api_key,
+                    show_tool_calls=True,
+                    markdown=True,
+                    read_chat_history=True,
+                )
+
+                # Get response from web agent
+                try:
+                    response_text = await asyncio.to_thread(web_agent.run, user_message, stream=False)
+                    
+                    output_message = response_text.content
+                    lines = output_message.split('\n')
+                    output_message = '\n'.join(lines[4:]) 
+                    print(output_message)
+
                     ai_message = await self.save_message({
-                        'text': f"I've processed the PDF. Here's a summary:\n\n{summary}",
+                        'text': output_message,
                         'message_type': MessageType.AI.value,
                         'content': {}
                     }, session_id, is_ai=True)
-                    
+
                     if ai_message:
                         chat_session["lastMessage"] = ai_message["text_content"]
                         chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
-                        await self.send_message_to_channel({
-                            'type': 'chat_message',
-                            'session_id': session_id,
-                            'message': ai_message,
-                            'is_ai': True
-                        })
-                    return
-
-            if user_message.strip():
-                ai_response, image, size = await asyncio.to_thread(chatbot.ask_question, user_message)
-                
-                # Recheck channel validity after AI response
-                if (user_id not in self.channel_sessions or
-                    self.user_channel not in self.channel_sessions[user_id] or
-                    self.channel_sessions[user_id][self.user_channel] != session_id):
-                    return
-                
-                if image and size:
-                    ai_message = await self.save_message({
-                        'text': ai_response,
-                        'message_type': MessageType.MULTIPLE.value,
-                        'content': {},
-                        'file': {
-                            "path": image,
-                            "name": "AiChatBot.png",
-                            "size": size,
-                            "type": "IMAGE",
-                        }
-                    }, session_id, is_ai=True)
-                else:
-                    ai_message = await self.save_message({
-                        'text': ai_response,
-                        'message_type': MessageType.AI.value,
+                        
+                        await self.channel_layer.group_send(
+                            self.user_channel,
+                            {
+                                'type': 'chat_message',
+                                'session_id': session_id,
+                                'message': ai_message,
+                                'is_ai': True
+                            }
+                        )
+                except Exception as e:
+                    logger.error(f"Error processing web agent response: {str(e)}", exc_info=True)
+                    
+                    error_message = await self.save_message({
+                        'text': "I apologize, but I'm having trouble retrieving information from the web right now.",
+                        'message_type': MessageType.SYSTEM.value,
                         'content': {}
                     }, session_id, is_ai=True)
-                
-                if ai_message:
-                    chat_session["lastMessage"] = ai_message["text_content"]
-                    chat_session["time"] = datetime.now().strftime("%I:%M:%S %p")
-                    
-                    await self.send_message_to_channel({
-                        'type': 'chat_message',
-                        'session_id': session_id,
-                        'message': ai_message,
-                        'is_ai': True
-                    })
-                    
+
+                    if error_message:
+                        await self.channel_layer.group_send(
+                            self.user_channel,
+                            {
+                                'type': 'chat_message',
+                                'session_id': session_id,
+                                'message': error_message,
+                                'is_ai': True
+                            }
+                        )
         except Exception as e:
             logger.error(f"Error processing AI response: {str(e)}", exc_info=True)
-            
-            # Only send error if channel is still valid
-            if (user_id in self.channel_sessions and 
-                self.user_channel in self.channel_sessions[user_id] and
-                self.channel_sessions[user_id][self.user_channel] == session_id):
-                
-                error_message = await self.save_message({
-                    'text': "I apologize, but I'm having trouble processing your request right now.",
-                    'message_type': MessageType.SYSTEM.value,
-                    'content': {}
-                }, session_id, is_ai=True)
-                
-                if error_message:
-                    await self.send_message_to_channel({
+            error_message = await self.save_message({
+                'text': "I apologize, but I'm having trouble processing your request right now.",
+                'message_type': MessageType.SYSTEM.value,
+                'content': {}
+            }, session_id, is_ai=True)
+
+            if error_message:
+                await self.channel_layer.group_send(
+                    self.user_channel,
+                    {
                         'type': 'chat_message',
                         'session_id': session_id,
                         'message': error_message,

@@ -16,7 +16,6 @@ import JSZip from 'jszip'; // Import JSZip for unzipping files
 // import 'emoji-mart/css/emoji-mart.css';
 // import Underline from "./extensions/Underline"; 
 
-
 const { useToken } = theme;
 const { TextArea } = Input;
 const { Option } = Select;
@@ -38,7 +37,6 @@ const PDFWindow = () => {
     const { SetaddUploadedFiles } = useAuth(); // Get the function to add uploaded files
     const fileInputRef = useRef(null); // Create a ref for the file input
     const [hoveredItemIndex, setHoveredItemIndex] = useState(null); // 
-    const [selectedAgent, setSelectedAgent] = useState(null);
 
     const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
@@ -123,13 +121,9 @@ const PDFWindow = () => {
         }
     };
 
-    const handleChange = (value) => {
-        setSelectedAgent(value);
-        console.log(`Selected agent: ${value}`);
-    };
-
     return (
-        <div className="pdf-window" style={{ padding: "10px", height: "100%" }}>
+        <div className="pdf-window" style={{ padding: "2px", height: "100%" }}>
+
             <Button
                 type="primary"
                 onClick={handleOpenFileInput} // Open file input directly
@@ -175,23 +169,10 @@ const PDFWindow = () => {
             />
 
             {/* Checkbox for searching the web */}
-            <div style={{ marginTop: "10px" }}>
-                <Text strong>Choose the Agent:</Text>
-                <Select
-                    value={selectedAgent}
-                    onChange={handleChange}
-                    style={{ width: '100%', marginTop: '8px' }} // Adjust width and margin
-                    placeholder="Select an agent"
-                >
-                    <Option value="webagent">Web Agent</Option>
-                    <Option value="researchagent">Research Agent</Option>
-                </Select>
-            </div>
+
         </div>
     );
 };
-
-// instead of having title and notes we store like [{title: "", notes: ""}, {title: "", notes: ""}]
 
 const NoteTaking = () => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -285,7 +266,7 @@ const NoteTaking = () => {
     if (!editor) return null;
 
     return (
-        <div style={{ padding: "20px", maxWidth: "800px", margin: "auto" }}>
+        <div style={{ padding: "2px", maxWidth: "800px", margin: "auto" }}>
             <Button type="primary" onClick={addNewNote} style={{ marginBottom: "10px", width: '100%' }}>
                 New Note
             </Button>
@@ -365,6 +346,11 @@ const NoteTaking = () => {
 
 const AiAssistant = () => {
     const { token } = useToken();
+    const [selectedAgent, setSelectedAgent] = useState("pdf_agent");
+
+    const handleChange = (value) => {
+        setSelectedAgent(value);
+    };
 
     const containerStyle = {
         height: "92vh",
@@ -375,8 +361,7 @@ const AiAssistant = () => {
 
     const rowStyle = {
         display: "flex",
-        // flex: 1,
-        overflow: "hidden", // Prevent overflow in the main container
+        overflow: "hidden", 
         margin: "10px"
     };
 
@@ -406,6 +391,30 @@ const AiAssistant = () => {
         overflow: "hidden",
     };
 
+    const headingStyleChatbox = {
+        margin: "0px 10px",
+        borderBottom: "1px solid #37383b",
+        color: "white",
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        height: "37px", 
+    };
+
+    const dropdownContainerStyle = {
+        display: "flex",
+        alignItems: "center", // Center label and dropdown vertically
+    };
+
+    const agentLabelStyle = {
+        marginRight: '10px', // Increase spacing to the right of the label
+    };
+
+    const selectStyle = {
+        width: '150px', // Set a fixed width for better appearance
+        height: '30px', // Maintain height
+    };
+
     return (
         <div style={containerStyle}>
             <div style={rowStyle}>
@@ -423,23 +432,32 @@ const AiAssistant = () => {
                         border: "1px solid #303030",
                         borderRadius: "6px",
                         color: "#e6e6e6",
+
                     }}>
-                        <h3 style={headingStyle}>Chat</h3>
+                        <div style={headingStyleChatbox}>
+                            <h3 style={{
+                                color: "white",
+                            }}>Chat</h3>
+                            <div style={dropdownContainerStyle}>
+                                <Text strong style={agentLabelStyle}>Agent:</Text>
+                                <Select
+                                    value={selectedAgent} // Use selectedAgent state here
+                                    onChange={handleChange}
+                                    style={selectStyle} // Apply new select styles
+                                    placeholder="Select an agent"
+                                >
+                                    <Option value="web_agent">Web</Option>
+                                    <Option value="pdf_agent">PDF</Option>
+                                </Select>
+                            </div>
+                        </div>
                         <div
                             style={{
                                 maxHeight: '84vh',
                                 minHeight: '84vh',
                                 overflow: "hidden",
-                                // marginTop: 16,
-                                // background: token.colorBgElevated,
                                 padding: 12,
-                                // borderRadius: token.borderRadiusLG,
                                 display: "flex",
-                                // gap: 12,
-                                // background: "#292929",
-                                // border: "1px solid #303030",
-                                // borderRadius: "6px",
-                                // color: "#e6e6e6",
                             }}
                             onClick={(e) => e.stopPropagation()}
                         >
@@ -447,15 +465,14 @@ const AiAssistant = () => {
                                 flex: 1,
                                 background: token.colorBgContainer,
                                 borderRadius: token.borderRadiusLG,
-                                // padding: 16
                             }}>
-                                <AIChat aiAssistant={true} />
+                                <AIChat aiAssistant={true} aiAgent={selectedAgent} />
                             </div>
                         </div>
                     </div>
                 </div>
-                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column' }}>
-                    <div style={boxStyle}>
+                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column',overflowY: 'auto'}}>
+                    <div style={{...boxStyle}}>
                         <h3 style={headingStyle}>Notes</h3>
                         <div style={contentStyle}>
                             <NoteTaking />

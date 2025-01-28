@@ -1,6 +1,14 @@
 #!/usr/bin/env python
+import inspect
 import os
 import sys
+
+# Monkey-patch inspect.getargspec to use inspect.getfullargspec if not present
+if not hasattr(inspect, "getargspec"):
+    def getargspec(func):
+        return inspect.getfullargspec(func)
+    inspect.getargspec = getargspec
+
 
 def main():
     """Run administrative tasks."""
@@ -12,6 +20,7 @@ def main():
             "Couldn't import Django. Are you sure it's installed?"
         ) from exc
     execute_from_command_line(sys.argv)
+
 
 if __name__ == '__main__':
     main()

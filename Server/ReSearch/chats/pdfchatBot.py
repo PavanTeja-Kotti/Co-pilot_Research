@@ -1,5 +1,4 @@
 from datetime import datetime
-import os
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +13,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
 import os
 import io
+import uuid
+
 
 import fitz  # PyMuPDF
 import open_clip
@@ -25,6 +26,12 @@ import faiss
 import base64
 import json
 from django.conf import settings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+unique_id = ""
 
 def create_FissIndex_directory():
         """Create upload directory if it doesn't exist"""
@@ -256,11 +263,7 @@ class VectorStoreManager:
 class GroqClient:
     def __init__(self, api_key: str):
         self.client = Groq(api_key=api_key)
-    
 
-    
-
-    
     def explain_image(self,base64_image):
      
        
@@ -363,7 +366,7 @@ class GroqClient:
          
             """
             }],
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
         )
         else :
             response = self.client.chat.completions.create(
@@ -397,7 +400,7 @@ class GroqClient:
             
                 """
                 }],
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
             )
         return response.choices[0].message.content
 
@@ -421,9 +424,14 @@ class PDFChatbot:
 
     def process_pdf(self, pdf_source: str) -> str:
         try:
-            INDEX_PATH = "persistent_data/faiss_index"
-            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+            global unique_id
+            unique_id = str(uuid.uuid4()) 
+            print(os.getenv('GROQ_API_KEY'))
+            
 
+            INDEX_PATH  = os.path.join(create_FissIndex_directory(), f"persistent_data+{unique_id}/faiss_index")
+            IMAGE_MAPPING_PATH = os.path.join(create_FissIndex_directory(),f"persistent_data+{unique_id}/image_mapping.json")
+          
             # Ensure the persistent storage directories exist
             os.makedirs(INDEX_PATH, exist_ok=True)
             if not os.path.exists(IMAGE_MAPPING_PATH):
@@ -439,8 +447,10 @@ class PDFChatbot:
                 model, _, transform = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
                 model.eval()
                 model.to(device)
-                INDEX_PATH = "persistent_data/faiss_index"
-                IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+                INDEX_PATH = f"FissIndex/persistent_data+{unique_id}/faiss_index"
+                IMAGE_MAPPING_PATH = f"FissIndex/persistent_data+{unique_id}/image_mapping.json"
+
+          
 
 
         
@@ -476,7 +486,6 @@ class PDFChatbot:
             raise ValueError(f"Error processing PDF: {str(e)}")
 
 
-
     def ask_question(self, question: str,group :bool=False, k: int = 5) -> str:
         """
         Ask a question by fetching similar documents from both text and table indices.
@@ -500,14 +509,15 @@ class PDFChatbot:
             model.eval()
             model.to(device) 
 
+
             text_embedding = self.generate_text_embedding(question, model, open_clip.tokenize)
-            INDEX_PATH = "persistent_data/faiss_index"
+            INDEX_PATH = f"FissIndex/persistent_data+{unique_id}/faiss_index"
             faiss_index = self.load_embeddings_from_faiss(os.path.join(INDEX_PATH, "image_embeddings.index"))
             D, I = faiss_index.search(np.array([text_embedding]), k=1)
             best_match_index = I[0][0]
             similarity = D[0][0]
             print("Smilarity score",similarity)
-            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+            IMAGE_MAPPING_PATH = f"FissIndex/persistent_data+{unique_id}/image_mapping.json"
             image_mapping = self.load_image_mapping(IMAGE_MAPPING_PATH)
             best_match_base64 = image_mapping[str(best_match_index)]["base64"]
             img_data = base64.b64decode(best_match_base64)
@@ -530,13 +540,11 @@ class PDFChatbot:
         if self.table_vector_store.vector_store:
             table_docs = self.table_vector_store.similarity_search(question, k=k)
         
-       
-        
         combined_context = " ".join([doc.page_content for doc in text_docs + table_docs])
+        # print("Question: question: ------------>>>>>>><<<<<<<<<>>>>>>>><<<<<: ", question, combined_context)
 
         if not combined_context:
             answer = self.groq_client.answer_question(question, "", "",group)
-        
 
         # Combine history context
         history_context = " ".join([f"Q: {h.question}\nA: {h.answer}" for h in self.chat_history])
@@ -588,16 +596,12 @@ class PDFChatbot:
             self.pdf_documents = {}
             self.current_pdf_id = None
 
-
 def main():
     # Initialize chatbot with your Groq API key
     chatbot = PDFChatbot(
-        groq_api_key="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",
+        groq_api_key=    os.getenv('GROQ_API_KEY') ,
         index_path='faiss_index'
-       
     )
-
-   
 
     try:
         # Test basic conversation
@@ -611,12 +615,9 @@ def main():
         
         print(f"PDF Summary:\n{summary}\n")
 
-
         # Ask questions about the combined content
         print("Asking questions about the combined content:")
-        questions = [
-            
-            
+        questions = [      
             "What is transformer",
             # "Exaplain transformer architecture with image",
             "crow doing",
@@ -627,12 +628,8 @@ def main():
             print(f"Q: {question}")
             print(f"A: {answer}\n")
         
-            
-
-
     except Exception as e:
         print(f"Error: {str(e)}")
-
 
 if __name__ == "__main__":
     main()
