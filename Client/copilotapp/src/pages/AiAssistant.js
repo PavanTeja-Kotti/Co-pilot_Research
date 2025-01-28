@@ -41,7 +41,7 @@ const PDFWindow = () => {
     const handleFileUpload = async (event) => {
         const uploadedFiles = Array.from(event.target.files);
         const validFiles = [];
-    
+
         for (const file of uploadedFiles) {
             if (file.type === 'application/pdf') {
                 validFiles.push(file);
@@ -50,14 +50,14 @@ const PDFWindow = () => {
                 validFiles.push(file);
             }
         }
-    
+
         if (validFiles.length !== uploadedFiles.length) {
             message.error('Only PDF and ZIP files are allowed.');
         }
-    
+
         setFiles((prevFiles) => [...prevFiles, ...validFiles]);
         event.target.value = null; // Reset input value to allow re-upload of the same file
-    
+
         await uploadFiles(validFiles);
     };
 
@@ -182,6 +182,7 @@ const PDFWindow = () => {
 };
 
 const NoteTaking = () => {
+    const { token } = useToken();
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [notes, setNotes] = useState([]);
     const [currentTitle, setCurrentTitle] = useState("");
@@ -286,7 +287,7 @@ const NoteTaking = () => {
             />
 
             {/* Toolbar */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "10px", backgroundColor: "#1e1e1e", padding: "10px", borderRadius: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "10px", background: token.colorBgContainer, padding: "10px", borderRadius: "8px" }}>
                 <Button onClick={() => editor.chain().focus().toggleBold().run()} type={editor.isActive("bold") ? "primary" : "default"} icon={<BoldOutlined />}>
                 </Button>
                 <Button onClick={() => editor.chain().focus().toggleItalic().run()} type={editor.isActive("italic") ? "primary" : "default"} icon={<ItalicOutlined />}>
@@ -316,7 +317,7 @@ const NoteTaking = () => {
             </div>
 
             {/* Editor */}
-            <EditorContent editor={editor} style={{ background: "#1e1e1e", padding: "10px" }} />
+            <EditorContent editor={editor} style={{ background: token.colorBgContainer, padding: "10px", border: `1px solid ${token.colorBorder}` }} />
 
             {/* Save Button */}
             <Button type="primary" onClick={handleSave} disabled={!currentTitle} style={{ marginTop: "20px" }}>
@@ -361,7 +362,7 @@ const AiAssistant = () => {
 
     const containerStyle = {
         height: "92vh",
-        background: "#1f1f1f",
+        background: token.colorBgContainer, // Use token for background
         display: "flex",
         flexDirection: "column",
     };
@@ -374,10 +375,10 @@ const AiAssistant = () => {
 
     const boxStyle = {
         flex: 1,
-        background: "#292929",
-        border: "1px solid #303030",
-        borderRadius: "6px",
-        color: "#e6e6e6",
+        background: token.colorBgContainer, // Use token for box background
+        border: `1px solid ${token.colorBorder}`, // Use token for border
+        borderRadius: token.borderRadiusLG, // Use token for border radius
+        color: token.textColorPrimary, // Assuming you have a text color token
         margin: "0 6px", // Spacing between columns
         display: "flex",
         flexDirection: "column",
@@ -385,9 +386,9 @@ const AiAssistant = () => {
 
     const headingStyle = {
         margin: "10px",
-        borderBottom: "1px solid #37383b",
+        borderBottom: `1px solid ${token.colorBorder}`, // Use token for border
         paddingBottom: "5px",
-        color: "white",
+        color: token.textColorHeading, // Assuming you have a specific heading color token
     };
 
     const contentStyle = {
@@ -395,13 +396,12 @@ const AiAssistant = () => {
         overflowY: "auto", // Allow vertical scrolling
         padding: "10px", // Padding for better spacing
         height: "300px",
-        overflow: "hidden",
     };
 
     const headingStyleChatbox = {
         margin: "0px 10px",
-        borderBottom: "1px solid #37383b",
-        color: "white",
+        borderBottom: `1px solid ${token.colorBorder}`, // Use token for border
+        color: token.textColorPrimary, // Use token for text color
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
@@ -435,10 +435,11 @@ const AiAssistant = () => {
                 </div>
                 <div style={{ flexBasis: '35%', maxWidth: '35%' }}>
                     <div style={{
-                        background: "#292929",
-                        border: "1px solid #303030",
+                        // background: "#292929",
+                        border: `1px solid ${token.colorBorder}`,
                         borderRadius: "6px",
                         color: "#e6e6e6",
+                        background: token.colorBgContainer,
 
                     }}>
                         <div style={headingStyleChatbox}>
@@ -478,8 +479,10 @@ const AiAssistant = () => {
                         </div>
                     </div>
                 </div>
-                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column', overflowY: 'auto',scrollbarWidth: 'none', /* For Firefox */
-    '-ms-overflow-style': 'none' }}>
+                <div style={{
+                    flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column', overflowY: 'auto', scrollbarWidth: 'none', /* For Firefox */
+                    '-ms-overflow-style': 'none'
+                }}>
                     <div style={{ ...boxStyle }}>
                         <h3 style={headingStyle}>Notes</h3>
                         <div style={contentStyle}>
