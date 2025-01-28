@@ -19,7 +19,12 @@ from dataclasses import dataclass, asdict, field
 from abc import ABC, abstractmethod
 from . import consumers
 from . import pdfchatBot
-from contextlib import redirect_stdout
+from dotenv import load_dotenv
+
+
+
+load_dotenv()
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -402,7 +407,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             self.chatbot_instances[user_id] = {}
         
         if session_id not in self.chatbot_instances[user_id]:
-            groq_api_key = os.getenv('GROQ_API_KEY') or "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"
+            groq_api_key = os.getenv('GROQ_API_KEY') 
             index_path = f'faiss_index_{user_id}_{session_id}'
             
             try:

@@ -13,6 +13,9 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
 import os
 import io
+import uuid
+
+
 import fitz  # PyMuPDF
 import open_clip
 import torch
@@ -23,6 +26,12 @@ import faiss
 import base64
 import json
 from django.conf import settings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+unique_id = ""
 
 def create_FissIndex_directory():
         """Create upload directory if it doesn't exist"""
@@ -415,9 +424,14 @@ class PDFChatbot:
 
     def process_pdf(self, pdf_source: str) -> str:
         try:
-            INDEX_PATH = "persistent_data/faiss_index"
-            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+            global unique_id
+            unique_id = str(uuid.uuid4()) 
+            print(os.getenv('GROQ_API_KEY'))
+            
 
+            INDEX_PATH  = os.path.join(create_FissIndex_directory(), f"persistent_data+{unique_id}/faiss_index")
+            IMAGE_MAPPING_PATH = os.path.join(create_FissIndex_directory(),f"persistent_data+{unique_id}/image_mapping.json")
+          
             # Ensure the persistent storage directories exist
             os.makedirs(INDEX_PATH, exist_ok=True)
             if not os.path.exists(IMAGE_MAPPING_PATH):
@@ -433,8 +447,12 @@ class PDFChatbot:
                 model, _, transform = open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')
                 model.eval()
                 model.to(device)
-                INDEX_PATH = "persistent_data/faiss_index"
-                IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+                INDEX_PATH = f"FissIndex/persistent_data+{unique_id}/faiss_index"
+                IMAGE_MAPPING_PATH = f"FissIndex/persistent_data+{unique_id}/image_mapping.json"
+
+          
+
+
         
                 image_embeddings = processor.generate_image_embeddings(extracted_images, model, transform)
 
@@ -491,14 +509,15 @@ class PDFChatbot:
             model.eval()
             model.to(device) 
 
+
             text_embedding = self.generate_text_embedding(question, model, open_clip.tokenize)
-            INDEX_PATH = "persistent_data/faiss_index"
+            INDEX_PATH = f"FissIndex/persistent_data+{unique_id}/faiss_index"
             faiss_index = self.load_embeddings_from_faiss(os.path.join(INDEX_PATH, "image_embeddings.index"))
             D, I = faiss_index.search(np.array([text_embedding]), k=1)
             best_match_index = I[0][0]
             similarity = D[0][0]
             print("Smilarity score",similarity)
-            IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
+            IMAGE_MAPPING_PATH = f"FissIndex/persistent_data+{unique_id}/image_mapping.json"
             image_mapping = self.load_image_mapping(IMAGE_MAPPING_PATH)
             best_match_base64 = image_mapping[str(best_match_index)]["base64"]
             img_data = base64.b64decode(best_match_base64)
@@ -580,7 +599,7 @@ class PDFChatbot:
 def main():
     # Initialize chatbot with your Groq API key
     chatbot = PDFChatbot(
-        groq_api_key="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",
+        groq_api_key=    os.getenv('GROQ_API_KEY') ,
         index_path='faiss_index'
     )
 
