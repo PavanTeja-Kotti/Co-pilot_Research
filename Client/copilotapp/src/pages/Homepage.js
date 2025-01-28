@@ -6,6 +6,7 @@ import api from '../utils/api';
 import { DynamicIconRenderer } from './InterestPage';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import { CardModel } from './Dashboard1';
+import { data } from 'react-router-dom';
 
 const { useToken } = theme;
 const { Title, Text } = Typography;
@@ -66,6 +67,7 @@ const Dashboard = () => {
   const [state, setState] = useState({
     loading: true,
     paperLoading: true,
+    recommendationsLoading: true,
     data: {
       readingData: [],
       papers: [],
@@ -425,18 +427,47 @@ const Dashboard = () => {
     setState(prev => ({ ...prev, [type]: value }));
     resetPapers();
   }, [resetPapers]);
+  
+
+  const fetchRecoMdationPaper = async () => {
+    try {
+
+      setState(prev => ({ ...prev, recommendationsLoading: true }));
+      const response =await api.scraping().getPapers(
+        0,
+        10,
+      );
+      if (response.success) {
+        setState(prev => ({
+          ...prev,
+          data: {
+            ...prev.data,
+            recommendations: response.data.results || [],
+          }
+        }));
+      } else {
+        message.error(response.error || 'Failed to fetch recommendations');
+      }
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+      message.error('Failed to fetch recommendations');
+    }
+    finally {
+      setState(prev => ({ ...prev, recommendationsLoading: false }));
+    }
+
+  }
+
+
 
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [readingResponse, statsResponse, researchfocus,recommendations] = await Promise.all([
+        const [readingResponse, statsResponse, researchfocus] = await Promise.all([
           api.scraping().readingstats(),
           api.scraping().statsdata(),
           api.scraping().getresearchfocus(),
-          api.scraping().getPapers(
-            0,
-            10,
-          )
+       
         ]);
 
       
@@ -448,7 +479,6 @@ const Dashboard = () => {
             ...prev.data,
             readingData: readingResponse.data,
             statsData: statsResponse.data || [], // Add fallback empty array
-            recommendations: recommendations.data.results || [],
             topicDistribution: researchfocus.data
           }
         }));
@@ -457,8 +487,12 @@ const Dashboard = () => {
         setState(prev => ({ ...prev, loading: false }));
       }
     };
+   
+    fetchRecoMdationPaper();
     fetchInitialData();
   }, []);
+
+  
   useEffect(() => {
     setState(prev => ({ ...prev, paperLoading: true }));
     fetchPapers(0, false);
@@ -524,7 +558,7 @@ const Dashboard = () => {
             readingData={state.data.readingData} 
           />
           <RecommendationsComponent 
-            loading={state.loading} 
+            loading={state.recommendationsLoading} 
             recommendations={state.data.recommendations} 
           />
           <ResearchFocusComponent 
