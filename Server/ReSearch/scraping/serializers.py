@@ -130,8 +130,6 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
     is_paper_read = serializers.SerializerMethodField()
     bookmark_id = serializers.SerializerMethodField()
     active_bookmarks_count = serializers.SerializerMethodField()
-    citation_count = serializers.IntegerField(required=False, default=0)
-    average_reading_time = serializers.IntegerField(required=False, default=0, allow_null=True)
 
     class Meta:
         model = ResearchPaper
@@ -162,60 +160,51 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
             'active_bookmarks_count',
             'is_paper_read'
         ]
-
-    def get_is_paper_read(self,obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return obj.paper_readers.filter(
-                user=request.user,
-                is_active=True
-            ).exists()
-        return False
-
-    def validate_citation_count(self, value):
-        """
-        Validate that citation count is not negative
-        """
-        if value < 0:
-            raise serializers.ValidationError("Citation count cannot be negative")
-        return value
-
-    def validate_average_reading_time(self, value):
-        """
-        Validate that average reading time is not negative
-        """
-        if value is not None and value < 0:
-            raise serializers.ValidationError("Average reading time cannot be negative")
-        return value
-        
-    def create(self, validated_data):
-        """
-        Create a new research paper with optional citation count and average reading time
-        """
-        citation_count = validated_data.get('citation_count', 0)
-        average_reading_time = validated_data.get('average_reading_time', 0)
-        
-        validated_data['citation_count'] = citation_count
-        validated_data['average_reading_time'] = average_reading_time
         
     def get_is_bookmarked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.paper_bookmarks.filter(
-                user=request.user,
-                is_active=True
-            ).exists()
+            return hasattr(obj, 'user_bookmarks') and len(obj.user_bookmarks) > 0
         return False
 
     def get_bookmark_id(self, obj):
         request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            bookmark = obj.paper_bookmarks.filter(
-                user=request.user,
-                is_active=True
-            ).first()
-            return bookmark.id if bookmark else None
+        if request and request.user.is_authenticated and hasattr(obj, 'user_bookmarks'):
+            bookmarks = obj.user_bookmarks
+            return str(bookmarks[0].id) if bookmarks else None
         return None
 
     def get_active_bookmarks_count(self, obj):
-        return obj.paper_bookmarks.filter(is_active=True).count()
+        return BookmarkedPaper.objects.filter(paper=obj, is_active=True).count()
+        
+    def get_is_paper_read(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return hasattr(obj, 'user_reads') and len(obj.user_reads) > 0
+        return False
+
+    def validate(self, data):
+        """
+        Validate the data before creation
+        """
+        if data.get('citation_count', 0) < 0:
+            raise serializers.ValidationError({"citation_count": "Citation count cannot be negative"})
+            
+        if data.get('average_reading_time') is not None and data['average_reading_time'] < 0:
+            raise serializers.ValidationError({"average_reading_time": "Average reading time cannot be negative"})
+            
+        return data
+
+    def create(self, validated_data):
+        # Ensure categories is a list
+        if 'categories' not in validated_data:
+            validated_data['categories'] = []
+            
+        # Set defaults for optional fields
+        validated_data.setdefault('citation_count', 0)
+        validated_data.setdefault('average_reading_time', 0)
+        validated_data.setdefault('pdf_url', None)
+        
+        # Create the ResearchPaper instance
+        paper = ResearchPaper.objects.create(**validated_data)
+        return paper
