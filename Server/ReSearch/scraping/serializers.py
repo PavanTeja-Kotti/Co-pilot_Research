@@ -127,10 +127,11 @@ class ReadPaperSerializer(serializers.ModelSerializer):
 
 class ResearchPaperSerializer(serializers.ModelSerializer):
     is_bookmarked = serializers.SerializerMethodField()
-    is_paper_read=serializers.SerializerMethodField()
+    is_paper_read = serializers.SerializerMethodField()
     bookmark_id = serializers.SerializerMethodField()
     active_bookmarks_count = serializers.SerializerMethodField()
-    # bookmarks = BookmarkedPaperSerializer(source='paper_bookmarks', many=True, read_only=True)
+    citation_count = serializers.IntegerField(required=False, default=0)
+    average_reading_time = serializers.IntegerField(required=False, default=0, allow_null=True)
 
     class Meta:
         model = ResearchPaper
@@ -145,14 +146,22 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
             'categories',
             'publication_date',
             'created_at',
+            'updated_at',
+            'citation_count',
+            'average_reading_time',
             'is_bookmarked',
             'bookmark_id',
             'active_bookmarks_count',
-            # 'bookmarks',
             'is_paper_read'
-            
         ]
-        read_only_fields = ['created_at', 'is_bookmarked', 'bookmark_id', 'active_bookmarks_count','is_paper_read']
+        read_only_fields = [
+            'created_at',
+            'updated_at',
+            'is_bookmarked', 
+            'bookmark_id', 
+            'active_bookmarks_count',
+            'is_paper_read'
+        ]
 
     def get_is_paper_read(self,obj):
         request = self.context.get('request')
@@ -163,6 +172,32 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
+    def validate_citation_count(self, value):
+        """
+        Validate that citation count is not negative
+        """
+        if value < 0:
+            raise serializers.ValidationError("Citation count cannot be negative")
+        return value
+
+    def validate_average_reading_time(self, value):
+        """
+        Validate that average reading time is not negative
+        """
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Average reading time cannot be negative")
+        return value
+        
+    def create(self, validated_data):
+        """
+        Create a new research paper with optional citation count and average reading time
+        """
+        citation_count = validated_data.get('citation_count', 0)
+        average_reading_time = validated_data.get('average_reading_time', 0)
+        
+        validated_data['citation_count'] = citation_count
+        validated_data['average_reading_time'] = average_reading_time
+        
     def get_is_bookmarked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:

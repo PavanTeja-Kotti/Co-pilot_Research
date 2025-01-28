@@ -1065,7 +1065,7 @@ class PaperIndexManager:
         except Exception as e:
             print(f"Index building error: {str(e)}")
 
-def get_enhanced_content_recommendations(user_id: str) -> List[str]:
+def get_enhanced_content_recommendations(user_id: str) -> List[Tuple[str, float]]:
     index_manager = PaperIndexManager()
     
     try:
@@ -1111,7 +1111,7 @@ def get_enhanced_content_recommendations(user_id: str) -> List[str]:
             if papers:
                 index_manager.build_index(papers)
         
-        # Process recommendations
+        # Process recommendations with scores
         paper_scores = []
         seen_papers = {str(p.id) for p in user_papers}
         
@@ -1130,15 +1130,14 @@ def get_enhanced_content_recommendations(user_id: str) -> List[str]:
                 
                 final_score = (interest_score * 0.7) + (diversity_score * 0.3)
                 if final_score > 0:
-                    paper_scores.append((str(paper.id), final_score))
+                    paper_scores.append((str(paper.id), round(final_score, 4)))
         
         # Sort recommendations
-        return [pid for pid, _ in sorted(paper_scores, key=lambda x: x[1], reverse=True)]
+        return sorted(paper_scores, key=lambda x: x[1], reverse=True)
         
     except Exception as e:
         print(f"Recommendation error: {str(e)}")
         return []
-
 def calculate_interest_score(paper, user_interests, user_keywords, user_authors, index_manager):
     score = 0
     
@@ -1199,16 +1198,18 @@ def recommendation_paper(request):
     categories = [cat.lower() for cat in request.GET.getlist('categories', [])]
     
     cache_key = f'recommendations_{request.user.id}'
-    recommended_ids = cache.get(cache_key)
+    recommended_data = cache.get(cache_key)
     
-    if recommended_ids is None:
-        recommended_ids = get_enhanced_content_recommendations(str(request.user.id))
-        if recommended_ids:
-            cache.set(cache_key, recommended_ids, CACHE_TIMEOUT)
+    if recommended_data is None:
+        recommended_data = get_enhanced_content_recommendations(str(request.user.id))
+        if recommended_data:
+            cache.set(cache_key, recommended_data, CACHE_TIMEOUT)
     
-    if not recommended_ids:
+    if not recommended_data:
         return Response([])
 
+    # Split IDs and scores
+    recommended_ids, scores = zip(*recommended_data) if recommended_data else ([], [])
     recommendations = ResearchPaper.objects.filter(id__in=recommended_ids)
     
     if search_query:
@@ -1242,15 +1243,22 @@ def recommendation_paper(request):
         )
     )
     
-    id_map = {str(id): i for i, id in enumerate(recommended_ids)}
+    # Create a mapping of paper IDs to their scores
+    score_map = dict(recommended_data)
+    
+    # Sort recommendations and attach scores
     recommendations = sorted(
         recommendations,
-        key=lambda x: id_map.get(str(x.id), float('inf'))
+        key=lambda x: score_map.get(str(x.id), 0),
+        reverse=True
     )
     
     paginator = ResearchPaperPagination()
     page = paginator.paginate_queryset(recommendations, request)
     
-    return paginator.get_paginated_response(
-        ResearchPaperSerializer(page, many=True, context={'request': request}).data
-    )
+    # Serialize papers and add recommendation scores
+    serialized_papers = ResearchPaperSerializer(page, many=True, context={'request': request}).data
+    for paper in serialized_papers:
+        paper['recommendation_score'] = score_map.get(paper['id'], 0)
+    
+    return paginator.get_paginated_response(serialized_papers)

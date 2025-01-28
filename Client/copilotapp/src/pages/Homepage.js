@@ -302,7 +302,7 @@ const Dashboard = () => {
                         {paper.title.length > 50 ? `${paper.title.substring(0, 50)}...` : paper.title}
                       </Text>
                       <Tag style={{ background: token.colorSuccessBg, color: token.colorSuccess, margin: 0, border: 'none' }}>
-                        {paper.relevance||'0'}%
+                        {Math.round(paper.recommendation_score*100)||'0'}%
                       </Tag>
                     </div>
                     <Text style={{ color: token.colorTextSecondary, display: 'block' }}>
@@ -317,7 +317,7 @@ const Dashboard = () => {
                       {paper.source}
                     </Tag>
                     <Text style={{ fontSize: '12px', color: token.colorTextSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <StarOutlined /> {paper.citations||'200'} citations
+                      <StarOutlined /> {paper.citation_count||'0'} citations
                     </Text>
                   </div>
                 </div>
