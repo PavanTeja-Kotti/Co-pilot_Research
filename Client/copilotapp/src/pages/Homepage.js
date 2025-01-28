@@ -131,7 +131,7 @@ const Dashboard = () => {
     );
   });
 
-  const ItemCard = React.memo(({ paper, author, type }) => {
+  const ItemCard = React.memo(({ paper, author, type,recomended=false }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const handleModalOpen = useCallback(() => setIsModalOpen(true), []);
     const { token } = useToken();
@@ -171,6 +171,45 @@ const Dashboard = () => {
     return (
       <>
         <CardModel item={paper} isModalOpen={isModalOpen} setIsModalOpen={setIsModalOpen} />
+        
+        { recomended?
+
+<div  style={styles.paperCard}>
+<div style={{ marginBottom: '12px' }}>
+  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+    <Text style={{ color: token.colorText, fontWeight: 500, flex: 1, marginRight: '8px' }}>
+    {paper.title?.length > 50 ? `${paper.title.substring(0, 50)}...` : paper.title}
+    <Button type="text" icon={<EyeOutlined />} onClick={handleModalOpen} title="View Details"/>
+    </Text>
+    <Tag style={{ background: token.colorSuccessBg, color: token.colorSuccess, margin: 0, border: 'none' }}>
+      {Math.round(paper.recommendation_score*100)||'0'}%
+    </Tag>
+  </div>
+  <Text style={{ color: token.colorTextSecondary, display: 'block' }}>
+    {paper.authors.join(', ').length > 30 ? `${paper.authors.join(', ').substring(0, 30)}...` : paper.authors.join(', ')}
+  </Text>
+</div>
+{/* <Text style={{ color: token.colorTextSecondary, fontSize: '12px', display: 'block', marginBottom: '12px' }}>
+
+</Text> */}
+<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+  <Tag style={{ ...styles.tagBase, ...styles.sourceTag }}>
+    {paper.source}
+
+  </Tag>
+  {paper.categories.map((tag, index) => (
+                  <Tag key={index} style={{
+                    ...tagStyle.categoryTag,
+                    color:"#6abe39"
+                  } }>{tag}</Tag>
+                ))}
+  <Text style={{ fontSize: '12px', color: token.colorTextSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
+    <StarOutlined /> {paper.citation_count||'0'} citations
+  </Text>
+</div>
+</div>
+        :
+        
         <Col xs={24} md={12}>
           <div style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -201,7 +240,10 @@ const Dashboard = () => {
                   <Tag style={tagStyle.sourceTag}>{paper.source}</Tag>
                 )}
                 {paper.categories.map((tag, index) => (
-                  <Tag key={index} style={tagStyle.categoryTag}>{tag}</Tag>
+                  <Tag key={index} style={{
+                    ...tagStyle.categoryTag,
+                    color:"#6abe39"
+                  } }>{tag}</Tag>
                 ))}
               </div>
             )}
@@ -218,6 +260,8 @@ const Dashboard = () => {
             </div>
           </div>
         </Col>
+         
+  }
       </>
     );
   });
@@ -267,12 +311,13 @@ const Dashboard = () => {
     </Col>
   ));
 
-  const RecommendationsComponent = React.memo(({ loading, recommendations }) => (
+  const RecommendationsComponent = React.memo(({ loading, recommendations }) => {
+    return (
     <Col xs={24} lg={8}>
       <div style={styles.card}>
         {loading ? (
           <>
-            <Skeleton active paragraph={{ rows: 1 }} />
+            {/* <Skeleton active paragraph={{ rows: 1 }} /> */}
             <Space direction="vertical" style={{ width: '100%' }} size={8}>
               {[1, 2].map((i) => (
                 <div key={i} style={styles.paperCard}>
@@ -295,41 +340,13 @@ const Dashboard = () => {
             msOverflowStyle: 'none',
 
             }}size={8}>
-
-              {recommendations.map((paper, index) => (
-                <div key={index} style={styles.paperCard}>
-                  <div style={{ marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <Text style={{ color: token.colorText, fontWeight: 500, flex: 1, marginRight: '8px' }}>
-                        {paper.title.length > 50 ? `${paper.title.substring(0, 50)}...` : paper.title}
-                      </Text>
-                      <Tag style={{ background: token.colorSuccessBg, color: token.colorSuccess, margin: 0, border: 'none' }}>
-                        {Math.round(paper.recommendation_score*100)||'0'}%
-                      </Tag>
-                    </div>
-                    <Text style={{ color: token.colorTextSecondary, display: 'block' }}>
-                      {paper.authors.join(', ').length > 30 ? `${paper.authors.join(', ').substring(0, 30)}...` : paper.authors.join(', ')}
-                    </Text>
-                  </div>
-                  <Text style={{ color: token.colorTextSecondary, fontSize: '12px', display: 'block', marginBottom: '12px' }}>
-                    {paper.reason||'No reason provided'}
-                  </Text>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Tag style={{ ...styles.tagBase, ...styles.sourceTag }}>
-                      {paper.source}
-                    </Tag>
-                    <Text style={{ fontSize: '12px', color: token.colorTextSecondary, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <StarOutlined /> {paper.citation_count||'0'} citations
-                    </Text>
-                  </div>
-                </div>
-              ))}
+              {recommendations.map((paper, index) => <ItemCard   key={`${paper.id || index}-recond${index}`}  paper={paper} type="ResearchPaper"  recomended={true}   /> )}
             </Space>
           </>
         )}
       </div>
     </Col>
-  ));
+  )});
 
   const ResearchFocusComponent = React.memo(({ loading, topicDistribution }) => (
     <Col xs={24} lg={8}>
