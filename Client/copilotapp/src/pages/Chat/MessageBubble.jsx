@@ -18,6 +18,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
 import 'pdfjs-dist/build/pdf.worker.entry';
 import Markdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 // import { MarkdownView } from 'react-native-markdown-view';
 
 const { Text } = Typography;
@@ -866,11 +867,10 @@ const MessageBubble = ({ message, type = 'private', Aichat = false }) => {
         whiteSpace: 'pre-wrap'
       }}>
         {/* <RichContent content={message.text_content} /> */}
-         {/* <Markdown>{message.text_content}</Markdown> */}
+         {/* <Markdown remarkPlugins={[remarkBreaks]}>{message.text_content}</Markdown> */}
         {/* {message.text_content} */} 
         {/* <MarkdownView>{message.text_content}</MarkdownView> */}
         {message.text_content}
-        
       </Text>
     );
   };

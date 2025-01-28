@@ -19,6 +19,7 @@ from dataclasses import dataclass, asdict, field
 from abc import ABC, abstractmethod
 from . import consumers
 from . import pdfchatBot
+from contextlib import redirect_stdout
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -424,6 +425,11 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                 raise
 
 
+    def suppress_output(func):
+        with open(os.devnull, 'w') as fnull:
+            with redirect_stdout(fnull):
+                func()
+
     async def process_ai_response(self, user_message: str, session_id: str, message: Dict, data):
         try:
             if data["ai_agent"] == 'pdf_agent':
@@ -525,11 +531,11 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                 # Get response from web agent
                 try:
                     response_text = await asyncio.to_thread(web_agent.run, user_message, stream=False)
-                    print("+++++++++: ", response_text)
-                    # print(dir(response_text))
+                    
                     output_message = response_text.content
+                    lines = output_message.split('\n')
+                    output_message = '\n'.join(lines[4:]) 
                     print(output_message)
-                    print("output_message",type(output_message))
 
                     ai_message = await self.save_message({
                         'text': output_message,

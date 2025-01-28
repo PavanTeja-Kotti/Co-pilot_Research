@@ -471,8 +471,8 @@ const AiAssistant = () => {
                         </div>
                     </div>
                 </div>
-                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column' }}>
-                    <div style={boxStyle}>
+                <div style={{ flexBasis: '40%', maxWidth: '40%', display: 'flex', flexDirection: 'column',overflowY: 'auto'}}>
+                    <div style={{...boxStyle}}>
                         <h3 style={headingStyle}>Notes</h3>
                         <div style={contentStyle}>
                             <NoteTaking />

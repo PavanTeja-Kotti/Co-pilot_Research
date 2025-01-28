@@ -13,7 +13,6 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
 import os
 import io
-
 import fitz  # PyMuPDF
 import open_clip
 import torch
@@ -436,8 +435,6 @@ class PDFChatbot:
                 model.to(device)
                 INDEX_PATH = "persistent_data/faiss_index"
                 IMAGE_MAPPING_PATH = "persistent_data/image_mapping.json"
-
-
         
                 image_embeddings = processor.generate_image_embeddings(extracted_images, model, transform)
 
@@ -469,7 +466,6 @@ class PDFChatbot:
             return summary
         except Exception as e:
             raise ValueError(f"Error processing PDF: {str(e)}")
-
 
 
     def ask_question(self, question: str,group :bool=False, k: int = 5) -> str:
