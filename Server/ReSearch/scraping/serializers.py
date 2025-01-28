@@ -127,10 +127,9 @@ class ReadPaperSerializer(serializers.ModelSerializer):
 
 class ResearchPaperSerializer(serializers.ModelSerializer):
     is_bookmarked = serializers.SerializerMethodField()
-    is_paper_read=serializers.SerializerMethodField()
+    is_paper_read = serializers.SerializerMethodField()
     bookmark_id = serializers.SerializerMethodField()
     active_bookmarks_count = serializers.SerializerMethodField()
-    # bookmarks = BookmarkedPaperSerializer(source='paper_bookmarks', many=True, read_only=True)
 
     class Meta:
         model = ResearchPaper
@@ -145,42 +144,67 @@ class ResearchPaperSerializer(serializers.ModelSerializer):
             'categories',
             'publication_date',
             'created_at',
+            'updated_at',
+            'citation_count',
+            'average_reading_time',
             'is_bookmarked',
             'bookmark_id',
             'active_bookmarks_count',
-            # 'bookmarks',
             'is_paper_read'
-            
         ]
-        read_only_fields = ['created_at', 'is_bookmarked', 'bookmark_id', 'active_bookmarks_count','is_paper_read']
-
-    def get_is_paper_read(self,obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            return obj.paper_readers.filter(
-                user=request.user,
-                is_active=True
-            ).exists()
-        return False
-
+        read_only_fields = [
+            'created_at',
+            'updated_at',
+            'is_bookmarked', 
+            'bookmark_id', 
+            'active_bookmarks_count',
+            'is_paper_read'
+        ]
+        
     def get_is_bookmarked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.paper_bookmarks.filter(
-                user=request.user,
-                is_active=True
-            ).exists()
+            return hasattr(obj, 'user_bookmarks') and len(obj.user_bookmarks) > 0
         return False
 
     def get_bookmark_id(self, obj):
         request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            bookmark = obj.paper_bookmarks.filter(
-                user=request.user,
-                is_active=True
-            ).first()
-            return bookmark.id if bookmark else None
+        if request and request.user.is_authenticated and hasattr(obj, 'user_bookmarks'):
+            bookmarks = obj.user_bookmarks
+            return str(bookmarks[0].id) if bookmarks else None
         return None
 
     def get_active_bookmarks_count(self, obj):
-        return obj.paper_bookmarks.filter(is_active=True).count()
+        return BookmarkedPaper.objects.filter(paper=obj, is_active=True).count()
+        
+    def get_is_paper_read(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return hasattr(obj, 'user_reads') and len(obj.user_reads) > 0
+        return False
+
+    def validate(self, data):
+        """
+        Validate the data before creation
+        """
+        if data.get('citation_count', 0) < 0:
+            raise serializers.ValidationError({"citation_count": "Citation count cannot be negative"})
+            
+        if data.get('average_reading_time') is not None and data['average_reading_time'] < 0:
+            raise serializers.ValidationError({"average_reading_time": "Average reading time cannot be negative"})
+            
+        return data
+
+    def create(self, validated_data):
+        # Ensure categories is a list
+        if 'categories' not in validated_data:
+            validated_data['categories'] = []
+            
+        # Set defaults for optional fields
+        validated_data.setdefault('citation_count', 0)
+        validated_data.setdefault('average_reading_time', 0)
+        validated_data.setdefault('pdf_url', None)
+        
+        # Create the ResearchPaper instance
+        paper = ResearchPaper.objects.create(**validated_data)
+        return paper
