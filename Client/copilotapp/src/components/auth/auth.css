@@ -1,0 +1,137 @@
+.auth-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+  
+  .brand-section {
+    flex: 1;
+    background-color: #1677ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    position: relative;
+  }
+  
+  .brand-content {
+    text-align: center;
+    max-width: 480px;
+    z-index: 1;
+  }
+  
+  .brand-content h1 {
+    color: #fff !important;
+    font-size: 64px !important;
+    margin-bottom: 24px !important;
+  }
+  
+  .brand-content span {
+    color: #fff !important;
+    font-size: 20px !important;
+    opacity: 0.9;
+  }
+  
+  .form-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    background: #fff;
+  }
+  
+  .auth-form-container {
+    width: 100%;
+    max-width: 420px;
+  }
+  
+  .auth-header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  
+  .auth-header h2 {
+    margin-bottom: 8px !important;
+    font-size: 32px !important;
+  }
+  
+  .login-form .ant-form-item {
+    margin-bottom: 24px;
+  }
+  
+  .login-form .ant-input-affix-wrapper {
+    border: 1px solid transparent;
+    transition: all 0.3s;
+  }
+  
+  .login-form .ant-input-affix-wrapper:hover,
+  .login-form .ant-input-affix-wrapper:focus,
+  .login-form .ant-input-affix-wrapper-focused {
+    background-color: #fff !important;
+    border-color: #1677ff !important;
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1) !important;
+  }
+  
+  .login-form .ant-input {
+    background: transparent !important;
+  }
+  
+  .auth-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .forgot-link {
+    padding: 0;
+    height: auto;
+  }
+  
+  .auth-footer {
+    text-align: center;
+    margin-top: 24px;
+  }
+  
+  .auth-footer .ant-btn-link {
+    padding: 0 4px;
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 768px) {
+    .auth-layout {
+      flex-direction: column;
+    }
+  
+    .brand-section {
+      display: none;
+    }
+  
+    .form-section {
+      padding: 24px;
+    }
+  
+    .auth-form-container {
+      max-width: 100%;
+    }
+  }
+  
+  /* Animation */
+  .auth-form-container {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .authcard .ant-card-body{
+    padding-top: 0px;
+  }
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }

@@ -1,4 +1,3 @@
-// Auth.js
 import React from 'react';
 import { Form, Input, Button, Typography, Card, message, theme,Layout } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined, EyeTwoTone, EyeInvisibleOutlined,DatabaseOutlined } from '@ant-design/icons';
@@ -7,272 +6,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
 import { pad } from 'lodash';
 import Logo from '../../asset/HeaderLogo';
+import './auth.css'
+
+// Import background image
+import backgroundImage from './test2.svg'; // Ensure this path matches your image location
 
 const { Title, Text } = Typography;
 const { useToken } = theme;
 
-const { Header } = Layout;
-
-
-const AppHeader = () => {
-  const { token } = useToken();
-  return (
-    <Header 
-      style={{
-        background: token.colorBgElevated,
-        borderBottom: `1px solid ${token.colorBorder}`,
-        position: 'fixed',
-        zIndex: 999,
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        backdropFilter: 'blur(20px)',
-        marginLeft: '-20px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* <DatabaseOutlined style={{ fontSize: '24px', color: '#60a5fa' }} /> */}
-        <a href="/"  style={{
-             display: 'flex',
-                  alignItems: 'center',
-                  gap: '16px',
-                  cursor: 'pointer',
-                  marginLeft: '-10px',
-                  transform: 'scale(1.2)'
-        }} ><Logo/></a>
-        
-        <Title level={3} style={{ margin: 0, color: 'rgba(255, 255, 255, 0.95)' }}>
-          {/* Tech Titans */}
-        </Title>
-      </div>
-    </Header>
-  );
-};
-
-const BackgroundSVG = () => {
-  const svgStyle = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    zIndex: -1
-  };
-
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      viewBox="0 0 1920 1080" 
-      preserveAspectRatio="xMidYMid slice" 
-      style={svgStyle}
-    >
-      <rect width="100%" height="100%" fill="#0a0a0a"/>
-      
-      <pattern id="tech-research-icons" x="0" y="0" width="250" height="250" patternUnits="userSpaceOnUse">
-        {/* AI & Machine Learning */}
-        <path 
-          d="M25 25 h20 v20 h-20 z m5 10 h10 m-12.5 -5 v10 m15 -10 v10" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Cloud Computing */}
-        <path 
-          d="M100 35 c-5 -5 5 -10 10 -5 c5 -10 20 -5 20 5 c10 -5 15 5 10 10 h-40 c-5 -5 0 -10 0 -10" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Database */}
-        <path 
-          d="M175 25 v20 h20 v-20 z m0 10 h20 m-20 -5 h20" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Scientific Flask */}
-        <path 
-          d="M25 100 l10 -20 v-10 h8 v10 l10 20 z" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Atom */}
-        <circle cx="100" cy="100" r="1.5" fill="#404040"/>
-        <ellipse 
-          cx="100" 
-          cy="100" 
-          rx="12" 
-          ry="4.8" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        <ellipse 
-          cx="100" 
-          cy="100" 
-          rx="12" 
-          ry="4.8" 
-          transform="rotate(60 100 100)"
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        <ellipse 
-          cx="100" 
-          cy="100" 
-          rx="12" 
-          ry="4.8" 
-          transform="rotate(120 100 100)"
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Graph */}
-        <path 
-          d="M175 100 l8 -8 l8 8 l8 -8 l8 8" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Laptop */}
-        <path 
-          d="M25 175 h30 l10 10 v20 h-40 z m5 15 h20 m-20 -7.5 h20" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Network */}
-        <circle 
-          cx="100" 
-          cy="175" 
-          r="8" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        <path 
-          d="M92 175 h-10 m26 0 h10" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        
-        {/* Chip */}
-        <path 
-          d="M175 175 l10 -10 h10 l10 10 l-10 10 h-10 z" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="2.5"
-        />
-        <path 
-          d="M180 175 h20 m-10 -10 v20" 
-          fill="none" 
-          stroke="#404040" 
-          strokeWidth="1.5"
-        />
-      </pattern>
-      
-      <rect width="100%" height="100%" fill="url(#tech-research-icons)"/>
-      
-      <defs>
-        <radialGradient id="centerGlow" cx="50%" cy="50%" r="75%">
-          <stop offset="0%" stopColor="#1f1f1f" stopOpacity="0.6"/>
-          <stop offset="100%" stopColor="#0a0a0a" stopOpacity="0.9"/>
-        </radialGradient>
-        
-        <linearGradient id="techGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#1a1a1a" stopOpacity="0.8"/>
-          <stop offset="50%" stopColor="#0f0f0f" stopOpacity="0.7"/>
-          <stop offset="100%" stopColor="#1a1a1a" stopOpacity="0.8"/>
-        </linearGradient>
-      </defs>
-      
-      <rect width="100%" height="100%" fill="url(#centerGlow)" opacity="0.85"/>
-      <rect width="100%" height="100%" fill="url(#techGradient)" opacity="0.75"/>
-    </svg>
-  );
-};
-
-const AuthCard = ({ children, title, subtitle }) => {
-  const { token } = useToken();
-  
-  const containerStyle = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: token.padding,
-    position: 'relative',
-    paddingTop: title=='Welcome back'? token.padding: '84px'
-    
-    
-  };
-
-  const cardStyle = {
-    background: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: '24px',
-    width: '100%',
-    maxWidth: 450,
-    padding: '40px',
-    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
-    backdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.05)',
-    position: 'relative',
-    overflow: 'hidden',
-    paddingTop: title=='Welcome back'? '0px': '0px'
-  };
-
-  const titleStyle = {
-    marginBottom: token.marginXS,
-    color: 'rgba(255, 255, 255, 0.95)',
-    fontSize: '32px',
-    fontWeight: 600,
-    textAlign: 'center',
-    letterSpacing: '-0.5px'
-  };
-
-  const subtitleStyle = {
-    textAlign: 'center',
-    marginBottom: token.marginLG * 1.5,
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: '16px'
-  };
-
-  return (
-    <>
-      <AppHeader />
-      <BackgroundSVG />
-      <div style={containerStyle}>
-        <Card bordered={false} style={cardStyle}>
-          <div 
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '6px',
-              background: 'linear-gradient(90deg, #60a5fa, #3b82f6)',
-              opacity: 0.7
-            }} 
-          />
-          <Title level={2} style={titleStyle}>{title}</Title>
-          <Text style={subtitleStyle}>{subtitle}</Text>
-          {children}
-        </Card>
-      </div>
-    </>
-  );
-};
 
 
 const Login = () => {
@@ -294,10 +35,15 @@ const Login = () => {
   };
 
   return (
+
     <AuthCard 
-      title="Welcome back"
-      subtitle={<>Don't have an account? <Link to="/register">Sign up</Link></>}
-    >
+    title="Welcome back"
+    subtitle={<>Don't have an account? <Link to="/register">Sign up</Link></>}
+  >
+
+  
+     
+      
       <Form
         form={form}
         layout="vertical"
@@ -334,9 +80,103 @@ const Login = () => {
           Sign in
         </Button>
       </Form>
+    
     </AuthCard>
   );
 };
+
+const AuthCard = ({ children,title,subtitle }) => {
+  const { token } = useToken();
+
+  return (
+   
+      <div className="auth-container" style={{ 
+        display: 'flex', 
+        minHeight: '100vh',
+        position: 'relative',
+        overflow: 'hidden',
+        // backgroundImage: `url(${backgroundImage})`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: '#161617',
+
+      }}>
+        <div 
+          className="brand-side"
+          style={{
+           
+            flex: 1,
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: token.paddingLG,
+            backgroundImage: `url(${backgroundImage})`,
+            backgroundSize: 'cover',
+            // backdropFilter: 'blur(8px)',
+          }}
+        >
+          <div className="brand-content" style={{ textAlign: 'center' }}>
+            <Title 
+              className="brand-title"
+              style={{ 
+                color: token.colorPrimary, 
+                marginBottom: token.marginMD,
+              }}
+            >
+              {/* Tech Titans */}
+            </Title>
+            <Text 
+              className="brand-description"
+              style={{ 
+                color: token.colorTextSecondary, 
+                fontSize: token.fontSizeLG,
+              }}
+            >
+              {/* Welcome to our platform. Manage your tasks efficiently with us. */}
+            </Text>
+          </div>
+        </div>
+        <div 
+          className="form-side"
+          style={{
+            flex: 1,
+            // display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: token.paddingLG,
+            // backgroundColor: 'rgba(0, 21, 41, 0.5)',
+            // backdropFilter: 'blur(8px)',
+           
+          }}
+        >
+          <div className='authcard' style={{ 
+            
+            paddingTop:title==='Welcome back'?"123px":token.paddingMD,
+            maxWidth: 460, 
+            width: '100%',
+            borderRadius: token.borderRadius,
+            // backgroundColor: '#161617',
+            boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
+            marginTop:"-23px"
+}}>
+          <Card  style={{
+            paddingTop:"0px",
+            backgroundColor: '#202021',
+          }}>
+          <Title level={2} >{title}</Title>
+          <Text >{subtitle}</Text>
+          
+            {children}
+          </Card>
+          
+          </div>
+        </div>
+      </div>
+  );
+};
+
 
 const Register = () => {
   const { register } = useAuth();
@@ -471,5 +311,4 @@ const Register = () => {
     </AuthCard>
   );
 };
-
-export { Login, Register };
+export  {Login,Register};

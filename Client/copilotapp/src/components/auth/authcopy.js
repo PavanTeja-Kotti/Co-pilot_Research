@@ -1,13 +1,55 @@
 // Auth.js
 import React from 'react';
-import { Form, Input, Button, Typography, Card, message, theme } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined, EyeTwoTone, EyeInvisibleOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Typography, Card, message, theme,Layout } from 'antd';
+import { UserOutlined, LockOutlined, MailOutlined, EyeTwoTone, EyeInvisibleOutlined,DatabaseOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../utils/auth';
+import { pad } from 'lodash';
+import Logo from '../../asset/HeaderLogo';
 
 const { Title, Text } = Typography;
 const { useToken } = theme;
+
+const { Header } = Layout;
+
+
+const AppHeader = () => {
+  const { token } = useToken();
+  return (
+    <Header 
+      style={{
+        background: token.colorBgElevated,
+        borderBottom: `1px solid ${token.colorBorder}`,
+        position: 'fixed',
+        zIndex: 999,
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        backdropFilter: 'blur(20px)',
+        marginLeft: '-20px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* <DatabaseOutlined style={{ fontSize: '24px', color: '#60a5fa' }} /> */}
+        <a href="/"  style={{
+             display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  cursor: 'pointer',
+                  marginLeft: '-10px',
+                  transform: 'scale(1.2)'
+        }} ><Logo/></a>
+        
+        <Title level={3} style={{ margin: 0, color: 'rgba(255, 255, 255, 0.95)' }}>
+          {/* Tech Titans */}
+        </Title>
+      </div>
+    </Header>
+  );
+};
 
 const BackgroundSVG = () => {
   const svgStyle = {
@@ -170,39 +212,68 @@ const AuthCard = ({ children, title, subtitle }) => {
     alignItems: 'center',
     justifyContent: 'center',
     padding: token.padding,
-    position: 'relative'
+    position: 'relative',
+    paddingTop: title=='Welcome back'? token.padding: '84px'
+    
+    
   };
 
   const cardStyle = {
-    background: token.colorBgElevated,
-    borderRadius: token.borderRadiusLG,
+    background: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: '24px',
     width: '100%',
     maxWidth: 450,
-    padding: token.paddingLG,
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-    backdropFilter: 'blur(8px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)'
+    padding: '40px',
+    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+    backdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    position: 'relative',
+    overflow: 'hidden',
+    paddingTop: title=='Welcome back'? '0px': '0px'
   };
 
   const titleStyle = {
     marginBottom: token.marginXS,
-    color: token.colorTextHeading
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: '32px',
+    fontWeight: 600,
+    textAlign: 'center',
+    letterSpacing: '-0.5px'
+  };
+
+  const subtitleStyle = {
+    textAlign: 'center',
+    marginBottom: token.marginLG * 1.5,
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: '16px'
   };
 
   return (
     <>
+      <AppHeader />
       <BackgroundSVG />
       <div style={containerStyle}>
         <Card bordered={false} style={cardStyle}>
+          <div 
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '6px',
+              background: 'linear-gradient(90deg, #60a5fa, #3b82f6)',
+              opacity: 0.7
+            }} 
+          />
           <Title level={2} style={titleStyle}>{title}</Title>
-          <Text type="secondary">{subtitle}</Text>
+          <Text style={subtitleStyle}>{subtitle}</Text>
           {children}
         </Card>
       </div>
     </>
   );
 };
+
 
 const Login = () => {
   const { login } = useAuth();
@@ -354,6 +425,7 @@ const Register = () => {
           />
         </Form.Item>
 
+          
         <Form.Item
           name="password"
           rules={[
