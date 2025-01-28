@@ -66,7 +66,7 @@ Welcome to the Research Assistant WebApp developed by **Team Tech Titans** (Pava
 1. Clone the repository.
 2. Navigate to the backend directory:
    ```bash
-   cd backend
+   cd Server/ReSearch
    ```
 3. Create a virtual environment and activate it:
    ```bash
@@ -89,7 +89,7 @@ Welcome to the Research Assistant WebApp developed by **Team Tech Titans** (Pava
 ### Frontend Setup
 1. Navigate to the frontend directory:
    ```bash
-   cd frontend
+   cd Client/copilotall
    ```
 2. Install dependencies:
    ```bash
