@@ -60,7 +60,6 @@ Welcome to the Research Assistant WebApp developed by **Team Tech Titans** (Pava
 - Python 3.9+
 - Node.js 16+
 - npm or yarn
-- PostgreSQL or any compatible database
 
 ### Backend Setup
 1. Clone the repository.
